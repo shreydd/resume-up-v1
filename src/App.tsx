@@ -7,6 +7,7 @@ import { VaultManager } from './components/CareerVault/VaultManager';
 import { TailorView } from './components/TailorAI/TailorView';
 import { ResumeStudioView } from './components/ResumeStudio/ResumeStudioView';
 import { SavedResumesView } from './components/SavedResumes/SavedResumesView';
+import { ErrorBoundary } from './components/Shared/ErrorBoundary';
 import { Laptop } from 'lucide-react';
 
 export const App: React.FC = () => {
@@ -110,30 +111,32 @@ export const App: React.FC = () => {
       />
 
       <main className={`flex-1 min-h-0 ${activeTab === 'studio' ? 'flex flex-col overflow-hidden' : 'overflow-y-auto'}`}>
-        {activeTab === 'vault' && <VaultManager />}
-        
-        {activeTab === 'tailor' && (
-          <TailorView
-            onTailoredReady={handleTailoredReady}
-            onNavigateToVault={() => setActiveTab('vault')}
-          />
-        )}
+        <ErrorBoundary fallbackTitle="An error occurred in this view">
+          {activeTab === 'vault' && <VaultManager />}
+          
+          {activeTab === 'tailor' && (
+            <TailorView
+              onTailoredReady={handleTailoredReady}
+              onNavigateToVault={() => setActiveTab('vault')}
+            />
+          )}
 
-        {activeTab === 'studio' && (
-          <ResumeStudioView
-            initialResumeData={currentResumeData}
-            initialJobDescription={targetJobDescription}
-            savedResume={activeSavedResume}
-            onSaved={() => setActiveTab('saved')}
-          />
-        )}
+          {activeTab === 'studio' && (
+            <ResumeStudioView
+              initialResumeData={currentResumeData}
+              initialJobDescription={targetJobDescription}
+              savedResume={activeSavedResume}
+              onSaved={() => setActiveTab('saved')}
+            />
+          )}
 
-        {activeTab === 'saved' && (
-          <SavedResumesView
-            onOpenInStudio={handleOpenSavedInStudio}
-            onNavigateToTailor={() => setActiveTab('tailor')}
-          />
-        )}
+          {activeTab === 'saved' && (
+            <SavedResumesView
+              onOpenInStudio={handleOpenSavedInStudio}
+              onNavigateToTailor={() => setActiveTab('tailor')}
+            />
+          )}
+        </ErrorBoundary>
       </main>
     </div>
   );

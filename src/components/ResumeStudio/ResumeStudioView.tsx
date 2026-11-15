@@ -213,16 +213,21 @@ export const ResumeStudioView: React.FC<ResumeStudioViewProps> = ({
       return;
     }
     if (!initialResumeData) return;
-    const { html: genHtml, css: genCss } = renderTemplate(selectedTemplate, initialResumeData);
-    
-    // Apply selected font if non-default
-    const font = CURATED_FONTS.find(f => f.id === selectedFontId);
-    const finalCss = font ? applyFontToCSS(genCss, font) : genCss;
+    try {
+      const { html: genHtml, css: genCss } = renderTemplate(selectedTemplate, initialResumeData);
+      
+      // Apply selected font if non-default
+      const font = CURATED_FONTS.find(f => f.id === selectedFontId);
+      const finalCss = font ? applyFontToCSS(genCss, font) : genCss;
 
-    setRawHtml(genHtml);
-    setRawCss(finalCss);
-    setLiveHtml(genHtml);
-    setLiveCss(finalCss);
+      setRawHtml(genHtml);
+      setRawCss(finalCss);
+      setLiveHtml(genHtml);
+      setLiveCss(finalCss);
+    } catch (err) {
+      console.error('Failed to render resume template:', err);
+      showToast('Error rendering template preview');
+    }
   }, [selectedTemplate, initialResumeData, savedResume]);
 
   // Debounced live preview update

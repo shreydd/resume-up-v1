@@ -90,14 +90,28 @@ export function generateMinimalHTML(data: ResumeData): string {
 
   const customSectionsHtml = (customSections || []).map(({ section, items }) => {
     if (!items || items.length === 0) return '';
+    const sectionTitle = section?.title || 'Custom Section';
     return `
     <section class="minimal-section">
-      <h2 class="minimal-heading">${escapeHtml(section.title)}</h2>
-      ${items.map(item => `
+      <h2 class="minimal-heading">${escapeHtml(sectionTitle)}</h2>
+      ${items.map(item => {
+        const rawBullets = Array.isArray(item.bullets) 
+          ? item.bullets 
+          : (typeof item.bullets === 'string' ? [item.bullets] : []);
+        
+        const validBullets = rawBullets.map(b => {
+          if (typeof b === 'string') return b.trim();
+          if (typeof b === 'object' && b !== null) {
+            return ((b as any).text || (b as any).originalText || (b as any).bullet || '').trim();
+          }
+          return String(b || '').trim();
+        }).filter(b => b.length > 0);
+
+        return `
         <div class="minimal-entry">
           <div class="entry-top">
             <span class="primary-text">
-              ${escapeHtml(item.title)}
+              ${escapeHtml(item.title || '')}
               ${item.url ? ` <a href="${escapeHtml(item.url)}" target="_blank" style="font-size: 8.5pt; font-weight: normal; color: #2563eb; text-decoration: none;">[Link]</a>` : ''}
             </span>
             <span class="meta-text">${escapeHtml([item.startDate, item.endDate].filter(Boolean).join(' — '))}</span>
@@ -108,13 +122,14 @@ export function generateMinimalHTML(data: ResumeData): string {
             </div>
           ` : ''}
           ${item.description ? `<p style="margin: 2px 0 3px 0; font-size: 9pt; color: #4b5563;">${escapeHtml(item.description)}</p>` : ''}
-          ${item.bullets && item.bullets.length > 0 ? `
+          ${validBullets.length > 0 ? `
             <ul class="minimal-bullets">
-              ${item.bullets.map(b => `<li>${escapeHtml(b)}</li>`).join('')}
+              ${validBullets.map(b => `<li>${escapeHtml(b)}</li>`).join('')}
             </ul>
           ` : ''}
         </div>
-      `).join('')}
+        `;
+      }).join('')}
     </section>
     `;
   }).join('');
@@ -280,11 +295,20 @@ export const minimalCSS = `
 }
 `.trim();
 
-function escapeHtml(str: string): string {
-  return str
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#039;');
+function escapeHtml(val: any): string {
+  if (val === null || val === undefined) return '';
+  if (typeof val === 'string') {
+    return val
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+  }
+  if (typeof val === 'object') {
+    const text = val.text ?? val.originalText ?? val.bullet ?? val.title ?? val.name ?? '';
+    if (text) return escapeHtml(text);
+    return '';
+  }
+  return escapeHtml(String(val));
 }

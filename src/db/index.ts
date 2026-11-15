@@ -257,6 +257,23 @@ export async function clearVault(): Promise<void> {
   });
 }
 
+export function normalizeBullets(raw: any): string[] {
+  if (!raw) return [];
+  if (Array.isArray(raw)) {
+    return raw.map(b => {
+      if (typeof b === 'string') return b.trim();
+      if (typeof b === 'object' && b !== null) {
+        return (b.text || b.originalText || b.bullet || b.content || '').trim();
+      }
+      return String(b || '').trim();
+    }).filter(b => b.length > 0);
+  }
+  if (typeof raw === 'string') {
+    return raw.split('\n').map(s => s.trim().replace(/^[•\-\*]\s*/, '')).filter(b => b.length > 0);
+  }
+  return [];
+}
+
 export async function getCompleteResumeData(): Promise<ResumeData> {
   const profileList = await db.profile.toArray();
   const profile = profileList[0] || {
@@ -281,7 +298,13 @@ export async function getCompleteResumeData(): Promise<ResumeData> {
 
   const groupedCustomSections = customSections.map(sec => ({
     section: sec,
-    items: customItems.filter(item => item.sectionId === sec.id)
+    items: customItems
+      .filter(item => item.sectionId === sec.id)
+      .map(item => ({
+        ...item,
+        title: item.title || '',
+        bullets: normalizeBullets(item.bullets)
+      }))
   }));
 
   return {
@@ -496,7 +519,7 @@ export async function importVaultFromJSON(jsonString: string): Promise<void> {
             location: item.location || "",
             url: item.url || item.link || "",
             description: item.description || item.summary || "",
-            bullets: Array.isArray(item.bullets) ? item.bullets : (Array.isArray(item.highlights) ? item.highlights : (item.description ? [item.description] : []))
+            bullets: normalizeBullets(item.bullets || item.highlights || (item.description ? [item.description] : []))
           });
         }
       }
@@ -520,7 +543,7 @@ export async function importVaultFromJSON(jsonString: string): Promise<void> {
           endDate: p.endDate || p.end_date || "",
           url: p.url || "",
           description: p.description || "",
-          bullets: Array.isArray(p.highlights) ? p.highlights : (Array.isArray(p.bullets) ? p.bullets : (p.description ? [p.description] : []))
+          bullets: normalizeBullets(p.highlights || p.bullets || (p.description ? [p.description] : []))
         });
       }
     }
@@ -544,7 +567,7 @@ export async function importVaultFromJSON(jsonString: string): Promise<void> {
           endDate: e.endDate || e.end_date || "",
           url: e.url || "",
           description: e.description || "",
-          bullets: Array.isArray(e.highlights) ? e.highlights : (Array.isArray(e.bullets) ? e.bullets : (e.description ? [e.description] : []))
+          bullets: normalizeBullets(e.highlights || e.bullets || (e.description ? [e.description] : []))
         });
       }
     }

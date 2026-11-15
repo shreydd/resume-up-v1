@@ -92,27 +92,42 @@ export function generateJakeHTML(data: ResumeData): string {
 
   const customSectionsHtml = (customSections || []).map(({ section, items }) => {
     if (!items || items.length === 0) return '';
+    const sectionTitle = (section?.title || 'CUSTOM SECTION').toUpperCase();
     return `
     <section class="section">
-      <h2 class="section-title">${escapeHtml(section.title.toUpperCase())}</h2>
-      ${items.map(item => `
+      <h2 class="section-title">${escapeHtml(sectionTitle)}</h2>
+      ${items.map(item => {
+        const rawBullets = Array.isArray(item.bullets) 
+          ? item.bullets 
+          : (typeof item.bullets === 'string' ? [item.bullets] : []);
+        
+        const validBullets = rawBullets.map(b => {
+          if (typeof b === 'string') return b.trim();
+          if (typeof b === 'object' && b !== null) {
+            return ((b as any).text || (b as any).originalText || (b as any).bullet || '').trim();
+          }
+          return String(b || '').trim();
+        }).filter(b => b.length > 0);
+
+        return `
         <div class="entry-block">
           <div class="row-header">
             <span class="company">
-              <strong>${escapeHtml(item.title)}</strong>
+              <strong>${escapeHtml(item.title || '')}</strong>
               ${item.subtitle ? ` | <em>${escapeHtml(item.subtitle)}</em>` : ''}
               ${item.url ? ` <a href="${escapeHtml(item.url)}" target="_blank" class="cert-link">[Link]</a>` : ''}
             </span>
             <span class="dates">${escapeHtml([item.startDate, item.endDate].filter(Boolean).join(' – '))}</span>
           </div>
           ${item.description ? `<p class="project-desc" style="margin: 2px 0 3px 0; font-size: 10pt; color: #333;">${escapeHtml(item.description)}</p>` : ''}
-          ${item.bullets && item.bullets.length > 0 ? `
+          ${validBullets.length > 0 ? `
             <ul class="bullet-list">
-              ${item.bullets.map(b => `<li>${escapeHtml(b)}</li>`).join('')}
+              ${validBullets.map(b => `<li>${escapeHtml(b)}</li>`).join('')}
             </ul>
           ` : ''}
         </div>
-      `).join('')}
+        `;
+      }).join('')}
     </section>
     `;
   }).join('');
@@ -251,11 +266,20 @@ export const jakeCSS = `
 }
 `.trim();
 
-function escapeHtml(str: string): string {
-  return str
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#039;');
+function escapeHtml(val: any): string {
+  if (val === null || val === undefined) return '';
+  if (typeof val === 'string') {
+    return val
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+  }
+  if (typeof val === 'object') {
+    const text = val.text ?? val.originalText ?? val.bullet ?? val.title ?? val.name ?? '';
+    if (text) return escapeHtml(text);
+    return '';
+  }
+  return escapeHtml(String(val));
 }

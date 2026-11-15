@@ -600,11 +600,20 @@ export const InsertVaultDataModal: React.FC<InsertVaultDataModalProps> = ({
   );
 };
 
-function escapeHtml(str: string): string {
-  return str
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#039;');
+function escapeHtml(val: any): string {
+  if (val === null || val === undefined) return '';
+  if (typeof val === 'string') {
+    return val
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+  }
+  if (typeof val === 'object') {
+    const text = val.text ?? val.originalText ?? val.bullet ?? val.title ?? val.name ?? '';
+    if (text) return escapeHtml(text);
+    return '';
+  }
+  return escapeHtml(String(val));
 }
