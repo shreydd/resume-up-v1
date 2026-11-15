@@ -67,19 +67,69 @@ export const InsertVaultDataModal: React.FC<InsertVaultDataModalProps> = ({
     return map;
   }, [customSections]);
 
-  // Filtered achievements
+  // Filtered achievements & bullets (includes experiences and custom items like projects)
   const filteredAchievements = useMemo(() => {
-    if (!achievements) return [];
-    return achievements.filter(ach => {
-      const exp = expMap.get(ach.experienceId);
-      const matchSearch = searchQuery === '' || 
-        ach.originalText.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (ach.category && ach.category.toLowerCase().includes(searchQuery.toLowerCase())) ||
-        (exp && exp.company.toLowerCase().includes(searchQuery.toLowerCase())) ||
-        (exp && exp.role.toLowerCase().includes(searchQuery.toLowerCase()));
-      return matchSearch;
+    const list: Array<{
+      id: string;
+      text: string;
+      sourceRole?: string;
+      sourceEntity: string;
+      category?: string;
+    }> = [];
+
+    if (achievements) {
+      for (const ach of achievements) {
+        const exp = expMap.get(ach.experienceId);
+        list.push({
+          id: ach.id,
+          text: ach.originalText,
+          sourceRole: exp?.role,
+          sourceEntity: exp?.company || 'Experience',
+          category: ach.category
+        });
+      }
+    }
+
+    if (customItems) {
+      for (const it of customItems) {
+        const sec = sectionMap.get(it.sectionId);
+        const secName = sec?.title || 'Custom';
+        
+        if (it.description && it.description.trim()) {
+          list.push({
+            id: `custom-desc-${it.id}`,
+            text: it.description.trim(),
+            sourceRole: it.subtitle,
+            sourceEntity: it.title,
+            category: secName
+          });
+        }
+
+        if (it.bullets && it.bullets.length > 0) {
+          it.bullets.forEach((b, bIdx) => {
+            if (b.trim()) {
+              list.push({
+                id: `custom-b-${it.id}-${bIdx}`,
+                text: b.trim(),
+                sourceRole: it.subtitle,
+                sourceEntity: it.title,
+                category: secName
+              });
+            }
+          });
+        }
+      }
+    }
+
+    if (!searchQuery) return list;
+    const q = searchQuery.toLowerCase();
+    return list.filter(item => {
+      return item.text.toLowerCase().includes(q) ||
+        item.sourceEntity.toLowerCase().includes(q) ||
+        (item.sourceRole && item.sourceRole.toLowerCase().includes(q)) ||
+        (item.category && item.category.toLowerCase().includes(q));
     });
-  }, [achievements, expMap, searchQuery]);
+  }, [achievements, expMap, customItems, sectionMap, searchQuery]);
 
   // Filtered experiences
   const filteredExperiences = useMemo(() => {
@@ -366,36 +416,34 @@ export const InsertVaultDataModal: React.FC<InsertVaultDataModalProps> = ({
         {/* Content Area */}
         <div className="max-h-96 overflow-y-auto space-y-2 pr-1">
           
-          {/* TAB 1: ACHIEVEMENTS */}
+          {/* TAB 1: ACHIEVEMENTS & BULLETS */}
           {activeTab === 'achievements' && (
             filteredAchievements.length === 0 ? (
-              <p className="text-center text-xs text-zinc-400 py-8">No achievements match your search.</p>
+              <p className="text-center text-xs text-zinc-400 py-8">No achievements or bullets match your search.</p>
             ) : (
-              filteredAchievements.map(ach => {
-                const exp = expMap.get(ach.experienceId);
+              filteredAchievements.map(item => {
                 return (
                   <div
-                    key={ach.id}
+                    key={item.id}
                     className="group flex items-start justify-between gap-3 rounded-xl border border-zinc-200 bg-white p-3.5 hover:border-zinc-300 hover:bg-zinc-50 transition-all"
                   >
                     <div className="flex-1 space-y-1">
-                      {exp && (
-                        <div className="flex items-center gap-2 text-[11px] text-zinc-500 font-medium">
-                          <span>{exp.role} @ {exp.company}</span>
-                          {ach.category && (
-                            <span className="rounded bg-zinc-100 px-1.5 py-0.2 font-mono text-[10px] text-zinc-600 border border-zinc-200">
-                              {ach.category}
-                            </span>
-                          )}
-                        </div>
-                      )}
-                      <p className="text-xs text-zinc-800 leading-relaxed font-sans">{ach.originalText}</p>
+                      <div className="flex items-center gap-2 text-[11px] text-zinc-500 font-medium">
+                        <span>{item.sourceRole ? `${item.sourceRole} · ` : ''}{item.sourceEntity}</span>
+                        {item.category && (
+                          <span className="rounded bg-zinc-100 px-1.5 py-0.2 font-mono text-[10px] text-zinc-600 border border-zinc-200">
+                            {item.category}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-zinc-800 leading-relaxed font-sans">{item.text}</p>
                     </div>
 
                     <button
                       type="button"
-                      onClick={() => handleInsertAchievement(ach.originalText)}
+                      onClick={() => handleInsertAchievement(item.text)}
                       className="flex-shrink-0 flex items-center gap-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 px-2.5 py-1.5 text-xs font-medium text-white transition-colors"
+                      title="Insert bullet point into editor"
                     >
                       <Plus className="h-3 w-3" />
                       <span>Insert</span>
@@ -456,44 +504,81 @@ export const InsertVaultDataModal: React.FC<InsertVaultDataModalProps> = ({
                 return (
                   <div
                     key={item.id}
-                    className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 rounded-xl border border-zinc-200 bg-white p-3.5 hover:border-zinc-300 hover:bg-zinc-50 transition-all"
+                    className="flex flex-col gap-3 rounded-xl border border-zinc-200 bg-white p-3.5 hover:border-zinc-300 hover:bg-zinc-50/50 transition-all"
                   >
-                    <div className="flex-1 space-y-1">
-                      <div className="flex items-center gap-2">
-                        {sec && (
-                          <span className="text-[10px] font-semibold uppercase px-2 py-0.5 rounded-md bg-zinc-100 text-zinc-600 border border-zinc-200">
-                            {sec.title}
-                          </span>
+                    <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+                      <div className="flex-1 space-y-1">
+                        <div className="flex items-center gap-2">
+                          {sec && (
+                            <span className="text-[10px] font-semibold uppercase px-2 py-0.5 rounded-md bg-zinc-100 text-zinc-600 border border-zinc-200">
+                              {sec.title}
+                            </span>
+                          )}
+                          <h4 className="font-semibold text-xs text-zinc-900">{item.title}</h4>
+                        </div>
+                        {item.subtitle && (
+                          <p className="text-xs text-zinc-600 font-medium">{item.subtitle}</p>
                         )}
-                        <h4 className="font-semibold text-xs text-zinc-900">{item.title}</h4>
+                        <div className="flex items-center gap-3 text-[11px] text-zinc-400">
+                          {dates && <span>{dates}</span>}
+                          {item.location && <span>{item.location}</span>}
+                          {item.url && (
+                            <span className="text-indigo-600 truncate max-w-xs">{item.url}</span>
+                          )}
+                        </div>
                       </div>
-                      {item.subtitle && (
-                        <p className="text-xs text-zinc-600 font-medium">{item.subtitle}</p>
-                      )}
-                      <div className="flex items-center gap-3 text-[11px] text-zinc-400">
-                        {dates && <span>{dates}</span>}
-                        {item.location && <span>{item.location}</span>}
-                        {item.url && (
-                          <span className="text-indigo-600 truncate max-w-xs">{item.url}</span>
-                        )}
+
+                      <div className="flex items-center gap-1.5 self-end sm:self-start flex-shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => handleInsertCustomItem(item)}
+                          className="flex items-center gap-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 px-3 py-1.5 text-xs font-medium text-white transition-colors shadow-xs"
+                          title="Insert complete formatted HTML block"
+                        >
+                          <Plus className="h-3 w-3" />
+                          <span>Insert Block</span>
+                        </button>
                       </div>
-                      {item.bullets && item.bullets.length > 0 && (
-                        <p className="text-[11px] text-zinc-500 italic mt-0.5">
-                          {item.bullets.length} bullet point{item.bullets.length === 1 ? '' : 's'} included
-                        </p>
-                      )}
                     </div>
 
-                    <div className="flex items-center gap-1.5 self-end sm:self-center flex-shrink-0">
-                      <button
-                        type="button"
-                        onClick={() => handleInsertCustomItem(item)}
-                        className="flex items-center gap-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 px-3 py-1.5 text-xs font-medium text-white transition-colors"
-                      >
-                        <Plus className="h-3 w-3" />
-                        <span>Insert Item</span>
-                      </button>
-                    </div>
+                    {/* Individual Description & Bullet Point Insertions */}
+                    {item.description && (
+                      <div className="flex items-start justify-between gap-2 rounded-lg bg-zinc-50 border border-zinc-200/70 p-2 text-xs text-zinc-700">
+                        <span className="flex-1 leading-relaxed font-sans">{item.description}</span>
+                        <button
+                          type="button"
+                          onClick={() => handleInsertAchievement(item.description!)}
+                          className="flex items-center gap-0.5 rounded bg-white hover:bg-zinc-100 px-2 py-1 text-[11px] font-medium text-zinc-700 border border-zinc-200 flex-shrink-0 transition-colors"
+                          title="Insert this description as a bullet/snippet"
+                        >
+                          <Plus className="h-2.5 w-2.5" />
+                          <span>Insert Text</span>
+                        </button>
+                      </div>
+                    )}
+
+                    {item.bullets && item.bullets.length > 0 && (
+                      <div className="space-y-1.5 pt-0.5">
+                        <div className="text-[11px] font-medium text-zinc-500">Bullet points ({item.bullets.length}):</div>
+                        {item.bullets.map((b, bIdx) => (
+                          <div
+                            key={bIdx}
+                            className="flex items-start justify-between gap-2 rounded-lg bg-zinc-50 border border-zinc-200/70 p-2 text-xs text-zinc-700"
+                          >
+                            <span className="flex-1 leading-relaxed font-sans">• {b}</span>
+                            <button
+                              type="button"
+                              onClick={() => handleInsertAchievement(b)}
+                              className="flex items-center gap-0.5 rounded bg-white hover:bg-zinc-100 px-2 py-1 text-[11px] font-medium text-zinc-700 border border-zinc-200 flex-shrink-0 transition-colors"
+                              title="Insert this bullet point into editor"
+                            >
+                              <Plus className="h-2.5 w-2.5" />
+                              <span>Insert Bullet</span>
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 );
               })

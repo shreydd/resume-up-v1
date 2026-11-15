@@ -87,6 +87,24 @@
     overflow: visible !important;
   }
 
+  .print-page-sheet {
+    box-shadow: none !important;
+    margin: 0 auto !important;
+    width: 210mm !important;
+    min-height: 297mm !important;
+    height: auto !important;
+    box-sizing: border-box !important;
+    padding: 0 !important;
+    overflow: visible !important;
+    page-break-after: always !important;
+    break-after: page !important;
+  }
+
+  .print-page-sheet:last-child {
+    page-break-after: auto !important;
+    break-after: auto !important;
+  }
+
   .print-portal-container .resume-sheet {
     box-shadow: none !important;
     margin: 0 auto !important;
@@ -94,17 +112,25 @@
     min-height: 297mm !important;
     height: auto !important;
     box-sizing: border-box !important;
-    padding: 15mm 18mm !important; /* Document margins are cleanly inside the sheet */
+    padding: 14mm 16mm !important;
     overflow: visible !important;
-    page-break-after: auto !important;
-    break-after: auto !important;
   }
 
-  .experience-block,
-  .entry-block,
-  .minimal-entry,
+  .minimal-heading,
   .section-title {
-    break-inside: avoid !important; /* Prevents awkward page breaks inside items */
+    break-after: avoid !important;
+    page-break-after: avoid !important;
+  }
+
+  .minimal-entry,
+  .entry-block,
+  .experience-block {
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+
+  .minimal-bullets li {
+    break-inside: avoid !important;
     page-break-inside: avoid !important;
   }
 }

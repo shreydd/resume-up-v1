@@ -8,7 +8,7 @@ export interface Profile {
   website?: string;
   linkedin?: string;
   github?: string;
-  preferredTemplate: 'jake' | 'minimal' | 'custom';
+  preferredTemplate: 'minimal' | 'custom' | string;
 }
 
 export interface Experience {
@@ -75,7 +75,7 @@ export interface TailoredResume {
   id: string;
   title: string;
   jobDescription: string;
-  templateId: 'jake' | 'minimal' | 'custom';
+  templateId: 'minimal' | 'custom' | string;
   rawHtml: string;
   rawCss: string;
   createdAt: Date;

@@ -63,7 +63,7 @@ export const VaultManager: React.FC = () => {
     website: '',
     linkedin: '',
     github: '',
-    preferredTemplate: 'jake'
+    preferredTemplate: 'minimal'
   };
 
   const [activeSection, setActiveSection] = useState<'profile' | 'experience' | 'custom' | 'education' | 'skills' | 'certifications'>('experience');

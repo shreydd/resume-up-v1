@@ -64,7 +64,7 @@ export const SAMPLE_DATA = {
     website: "https://alexmercer.dev",
     linkedin: "linkedin.com/in/alexmercer",
     github: "github.com/alexmercer",
-    preferredTemplate: "jake" as const
+    preferredTemplate: "minimal" as const
   },
   experiences: [
     {
@@ -257,6 +257,76 @@ export async function clearVault(): Promise<void> {
   });
 }
 
+export function extractCustomItemFields(raw: any) {
+  // Title / Name
+  const title = (raw.name || raw.title || raw.projectName || raw.item || raw.titleName || "Item").trim();
+
+  // Subtitle / Technologies / Tools / Role
+  let subtitle = raw.tools || raw.technologies || raw.techStack || raw.tech || raw.stack || raw.subtitle || raw.role || raw.position || raw.keywords || "";
+  if (Array.isArray(subtitle)) {
+    subtitle = subtitle.filter(Boolean).join(", ");
+  } else if (typeof subtitle === "string") {
+    subtitle = subtitle.trim();
+  } else {
+    subtitle = String(subtitle || "").trim();
+  }
+
+  // URL / Link
+  let url = (raw.url || raw.link || raw.website || raw.github || raw.demo || "").trim();
+  if (url && !url.startsWith("http://") && !url.startsWith("https://") && !url.startsWith("mailto:")) {
+    url = "https://" + url;
+  }
+
+  // Dates & Location
+  const startDate = (raw.startDate || raw.start_date || raw.date || raw.year || "").trim();
+  const endDate = (raw.endDate || raw.end_date || "").trim();
+  const location = (raw.location || raw.city || "").trim();
+
+  // Bullets & Description
+  let description = "";
+  let bullets: string[] = [];
+
+  // Check if explicit bullets/highlights/points/details/achievements are provided
+  const explicitBullets = raw.bullets || raw.highlights || raw.points || raw.details || raw.achievements;
+  if (Array.isArray(explicitBullets) && explicitBullets.length > 0) {
+    bullets = normalizeBullets(explicitBullets);
+  }
+
+  // Handle description or summary
+  const descVal = raw.description !== undefined ? raw.description : raw.summary;
+  if (Array.isArray(descVal)) {
+    // Description is an array of strings (e.g. user's projects JSON)
+    const normalized = normalizeBullets(descVal);
+    if (bullets.length === 0) {
+      bullets = normalized;
+    } else {
+      bullets = [...bullets, ...normalized];
+    }
+  } else if (typeof descVal === "string" && descVal.trim()) {
+    const trimmed = descVal.trim();
+    if (bullets.length === 0) {
+      if (trimmed.includes('\n') || /^[•\-\*]/m.test(trimmed)) {
+        bullets = normalizeBullets(trimmed);
+      } else {
+        description = trimmed;
+      }
+    } else {
+      description = trimmed;
+    }
+  }
+
+  return {
+    title,
+    subtitle,
+    startDate,
+    endDate,
+    location,
+    url,
+    description,
+    bullets
+  };
+}
+
 export function normalizeBullets(raw: any): string[] {
   if (!raw) return [];
   if (Array.isArray(raw)) {
@@ -280,7 +350,7 @@ export async function getCompleteResumeData(): Promise<ResumeData> {
     id: 1,
     fullName: "Your Name",
     email: "your.email@example.com",
-    preferredTemplate: 'jake'
+    preferredTemplate: 'minimal'
   };
 
   const experiences = await db.experiences.orderBy('startDate').reverse().toArray();
@@ -427,7 +497,7 @@ export async function importVaultFromJSON(jsonString: string): Promise<void> {
         website: p.website || "",
         linkedin: p.linkedin || "",
         github: p.github || "",
-        preferredTemplate: 'jake'
+        preferredTemplate: 'minimal'
       });
     }
 
@@ -508,18 +578,12 @@ export async function importVaultFromJSON(jsonString: string): Promise<void> {
         });
 
         const items = cs.items || [];
-        for (const item of items) {
+        for (const rawItem of items) {
+          const fields = extractCustomItemFields(rawItem);
           await db.customSectionItems.put({
             id: `item-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
             sectionId: secId,
-            title: item.title || item.name || "Item",
-            subtitle: item.subtitle || item.role || item.technologies || "",
-            startDate: item.start_date || item.startDate || "",
-            endDate: item.end_date || item.endDate || "",
-            location: item.location || "",
-            url: item.url || item.link || "",
-            description: item.description || item.summary || "",
-            bullets: normalizeBullets(item.bullets || item.highlights || (item.description ? [item.description] : []))
+            ...fields
           });
         }
       }
@@ -534,16 +598,11 @@ export async function importVaultFromJSON(jsonString: string): Promise<void> {
         order: 1
       });
       for (const p of data.projects) {
+        const fields = extractCustomItemFields(p);
         await db.customSectionItems.put({
           id: `item-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
           sectionId: secId,
-          title: p.name || p.title || "Project",
-          subtitle: p.subtitle || p.technologies || p.role || "",
-          startDate: p.startDate || p.start_date || "",
-          endDate: p.endDate || p.end_date || "",
-          url: p.url || "",
-          description: p.description || "",
-          bullets: normalizeBullets(p.highlights || p.bullets || (p.description ? [p.description] : []))
+          ...fields
         });
       }
     }
@@ -558,17 +617,85 @@ export async function importVaultFromJSON(jsonString: string): Promise<void> {
         order: 2
       });
       for (const e of extraList) {
+        const fields = extractCustomItemFields(e);
         await db.customSectionItems.put({
           id: `item-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
           sectionId: secId,
-          title: e.name || e.title || "Activity",
-          subtitle: e.role || e.subtitle || e.organization || "",
-          startDate: e.startDate || e.start_date || "",
-          endDate: e.endDate || e.end_date || "",
-          url: e.url || "",
-          description: e.description || "",
-          bullets: normalizeBullets(e.highlights || e.bullets || (e.description ? [e.description] : []))
+          ...fields
         });
+      }
+    }
+
+    // 4. Standard top-level publications
+    const pubList = data.publications || data.papers;
+    if (Array.isArray(pubList) && (!incomingCustom || !incomingCustom.some((s: any) => (s.title || '').toLowerCase().includes('pub')))) {
+      const secId = `sec-pubs-${Date.now()}`;
+      await db.customSections.put({
+        id: secId,
+        title: "Publications",
+        order: 3
+      });
+      for (const pub of pubList) {
+        const fields = extractCustomItemFields(pub);
+        await db.customSectionItems.put({
+          id: `item-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+          sectionId: secId,
+          ...fields
+        });
+      }
+    }
+
+    // 5. Standard top-level awards / honors
+    const awardList = data.awards || data.honors;
+    if (Array.isArray(awardList) && (!incomingCustom || !incomingCustom.some((s: any) => (s.title || '').toLowerCase().includes('award')))) {
+      const secId = `sec-awards-${Date.now()}`;
+      await db.customSections.put({
+        id: secId,
+        title: "Awards & Honors",
+        order: 4
+      });
+      for (const a of awardList) {
+        const fields = extractCustomItemFields(a);
+        await db.customSectionItems.put({
+          id: `item-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+          sectionId: secId,
+          ...fields
+        });
+      }
+    }
+
+    // 6. Generic catch-all for any other top-level array of items
+    const standardKeys = new Set([
+      'profile', 'experiences', 'experience', 'work', 'work_experience',
+      'education', 'skills', 'certifications', 'certificates',
+      'custom_sections', 'customSections', 'custom',
+      'projects', 'extracurriculars', 'extra_curriculars', 'activities',
+      'publications', 'papers', 'awards', 'honors'
+    ]);
+
+    let genericOrder = 10;
+    for (const [key, val] of Object.entries(data)) {
+      if (standardKeys.has(key.toLowerCase()) || !Array.isArray(val) || val.length === 0) continue;
+      if (typeof val[0] === 'object' || typeof val[0] === 'string') {
+        const titleFormatted = key
+          .replace(/[_\-]+/g, ' ')
+          .replace(/\b\w/g, c => c.toUpperCase());
+        
+        const secId = `sec-gen-${key}-${Date.now()}`;
+        await db.customSections.put({
+          id: secId,
+          title: titleFormatted,
+          order: genericOrder++
+        });
+
+        for (const item of val) {
+          const fields = extractCustomItemFields(item);
+          await db.customSectionItems.put({
+            id: `item-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+            sectionId: secId,
+            ...fields
+          });
+        }
       }
     }
   });

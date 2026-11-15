@@ -47,8 +47,8 @@ export const ResumeStudioView: React.FC<ResumeStudioViewProps> = ({
   savedResume = null,
   onSaved
 }) => {
-  const [selectedTemplate, setSelectedTemplate] = useState<'jake' | 'minimal' | 'custom'>('jake');
-  const [selectedFontId, setSelectedFontId] = useState<string>('computer-modern');
+  const [selectedTemplate, setSelectedTemplate] = useState<'minimal' | 'custom'>('minimal');
+  const [selectedFontId, setSelectedFontId] = useState<string>('inter');
   const [viewMode, setViewMode] = useState<'split' | 'preview'>('split');
   const [codeTab, setCodeTab] = useState<'html' | 'css'>('html');
   const [zoomLevel, setZoomLevel] = useState<number>(70);
@@ -60,6 +60,7 @@ export const ResumeStudioView: React.FC<ResumeStudioViewProps> = ({
 
   // Page measurement & visual break indicators
   const [pageCount, setPageCount] = useState<number>(1);
+  const [pageHtmls, setPageHtmls] = useState<string[]>([]);
   const [overflowRatio, setOverflowRatio] = useState<number>(1);
   const [showPageGuides, setShowPageGuides] = useState<boolean>(true);
   const [activePage, setActivePage] = useState<number>(1);
@@ -76,7 +77,109 @@ export const ResumeStudioView: React.FC<ResumeStudioViewProps> = ({
   const probeRef = useRef<HTMLDivElement>(null);
   const measureRef = useRef<HTMLDivElement>(null);
 
-  // Measure natural unclipped resume height against A4 standard
+  // Element-aware page partitioner for authentic resume page breaking
+  const paginateResume = (sheetEl: HTMLElement, pageHeightPx: number): string[] => {
+    const totalHeight = sheetEl.scrollHeight || sheetEl.offsetHeight;
+    if (totalHeight <= pageHeightPx + 15) {
+      return [sheetEl.outerHTML];
+    }
+
+    const computed = window.getComputedStyle(sheetEl);
+    const paddingTop = parseFloat(computed.paddingTop) || 53;
+    const paddingBottom = parseFloat(computed.paddingBottom) || 53;
+    const usableHeight = pageHeightPx - paddingTop - paddingBottom;
+
+    const wrapperClass = sheetEl.className || 'resume-sheet minimal-template';
+    const children = Array.from(sheetEl.children) as HTMLElement[];
+
+    const pages: string[] = [];
+    let currentPageElements: string[] = [];
+    let currentPageHeight = 0;
+
+    const commitPage = () => {
+      if (currentPageElements.length > 0) {
+        pages.push(`<div class="${wrapperClass}">${currentPageElements.join('')}</div>`);
+        currentPageElements = [];
+        currentPageHeight = 0;
+      }
+    };
+
+    for (const child of children) {
+      const isSection = child.tagName.toLowerCase() === 'section' || 
+                        child.classList.contains('minimal-section') || 
+                        child.classList.contains('section');
+
+      if (!isSection) {
+        const h = child.offsetHeight;
+        if (currentPageHeight + h > usableHeight && currentPageElements.length > 0) {
+          commitPage();
+        }
+        currentPageElements.push(child.outerHTML);
+        currentPageHeight += h;
+        continue;
+      }
+
+      const heading = child.querySelector('h2, .minimal-heading, .section-title') as HTMLElement | null;
+      let entries = Array.from(child.querySelectorAll('.minimal-entry, .entry-block, .minimal-skills, .minimal-certs')) as HTMLElement[];
+      if (entries.length === 0) {
+        entries = Array.from(child.children).filter(c => c !== heading) as HTMLElement[];
+      }
+      const headingHeight = heading ? heading.offsetHeight : 28;
+
+      if (entries.length === 0) {
+        const h = child.offsetHeight;
+        if (currentPageHeight + h > usableHeight && currentPageElements.length > 0) {
+          commitPage();
+        }
+        currentPageElements.push(child.outerHTML);
+        currentPageHeight += h;
+        continue;
+      }
+
+      const firstEntryHeight = entries[0]?.offsetHeight || 40;
+      if (currentPageHeight + headingHeight + firstEntryHeight > usableHeight && currentPageElements.length > 0) {
+        commitPage();
+      }
+
+      const sectionClass = child.className || 'minimal-section';
+      const headingHtml = heading ? heading.outerHTML : '';
+      let currentSectionEntries: string[] = [];
+      let isFirstChunkForSection = true;
+
+      currentPageHeight += headingHeight;
+
+      for (let i = 0; i < entries.length; i++) {
+        const entry = entries[i];
+        const entryHeight = entry.offsetHeight;
+
+        if (currentPageHeight + entryHeight > usableHeight && (currentSectionEntries.length > 0 || currentPageElements.length > 0)) {
+          if (currentSectionEntries.length > 0) {
+            const hHtml = isFirstChunkForSection ? headingHtml : '';
+            currentPageElements.push(`<section class="${sectionClass}">${hHtml}${currentSectionEntries.join('')}</section>`);
+            currentSectionEntries = [];
+            isFirstChunkForSection = false;
+          }
+          commitPage();
+
+          currentSectionEntries.push(entry.outerHTML);
+          currentPageHeight = entryHeight;
+        } else {
+          currentSectionEntries.push(entry.outerHTML);
+          currentPageHeight += entryHeight;
+        }
+      }
+
+      if (currentSectionEntries.length > 0) {
+        const hHtml = isFirstChunkForSection ? headingHtml : '';
+        currentPageElements.push(`<section class="${sectionClass}">${hHtml}${currentSectionEntries.join('')}</section>`);
+      }
+    }
+
+    commitPage();
+    return pages.length > 0 ? pages : [sheetEl.outerHTML];
+  };
+
+  // Measure natural unclipped resume height against A4 standard and compute pages
   const measureSheet = () => {
     if (!probeRef.current || !measureRef.current) return;
     const probeHeight = probeRef.current.offsetHeight || 1122.5;
@@ -87,11 +190,11 @@ export const ResumeStudioView: React.FC<ResumeStudioViewProps> = ({
 
     const measuredHeight = sheetEl.scrollHeight || sheetEl.offsetHeight;
     const ratio = Math.max(0.1, measuredHeight / probeHeight);
-    // 15px subpixel tolerance
-    const count = Math.max(1, Math.ceil((measuredHeight - 15) / probeHeight));
 
+    const pages = paginateResume(sheetEl, probeHeight);
+    setPageHtmls(pages);
+    setPageCount(pages.length);
     setOverflowRatio(Number(ratio.toFixed(2)));
-    setPageCount(count);
   };
 
   const scrollToPage = (pageNum: number) => {
@@ -204,7 +307,7 @@ export const ResumeStudioView: React.FC<ResumeStudioViewProps> = ({
   // Initialize or update template when resumeData, savedResume or template changes
   useEffect(() => {
     if (savedResume) {
-      setSelectedTemplate(savedResume.templateId);
+      setSelectedTemplate(savedResume.templateId === 'jake' ? 'minimal' : (savedResume.templateId as 'minimal' | 'custom'));
       setResumeTitle(savedResume.title);
       setRawHtml(savedResume.rawHtml);
       setRawCss(savedResume.rawCss);
@@ -309,7 +412,7 @@ export const ResumeStudioView: React.FC<ResumeStudioViewProps> = ({
           <div className="flex items-center gap-2">
             <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Template:</label>
             <div className="flex items-center rounded-lg bg-zinc-100 p-0.5 border border-zinc-200">
-              {(['jake', 'minimal', 'custom'] as const).map(t => (
+              {(['minimal', 'custom'] as const).map(t => (
                 <button
                   key={t}
                   type="button"
@@ -612,7 +715,7 @@ export const ResumeStudioView: React.FC<ResumeStudioViewProps> = ({
               <style dangerouslySetInnerHTML={{ __html: liveCss }} />
 
               {/* Discrete A4 Pages */}
-              {Array.from({ length: pageCount }).map((_, idx) => {
+              {(pageHtmls.length > 0 ? pageHtmls : [liveHtml]).map((pHtml, idx) => {
                 const pageNum = idx + 1;
                 return (
                   <div
@@ -621,37 +724,15 @@ export const ResumeStudioView: React.FC<ResumeStudioViewProps> = ({
                     className="relative bg-white shadow-2xl transition-all rounded-[1px] select-text"
                     style={{
                       width: '210mm',
-                      height: '297mm',
-                      overflow: 'hidden',
+                      minHeight: '297mm',
                       boxSizing: 'border-box'
                     }}
                   >
-                    {/* Content Slice for this Page */}
+                    {/* Content for this Page */}
                     <div
-                      style={{
-                        position: 'absolute',
-                        top: `-${idx * 297}mm`,
-                        left: 0,
-                        width: '210mm'
-                      }}
-                      dangerouslySetInnerHTML={{ __html: liveHtml }}
+                      className="w-full h-full"
+                      dangerouslySetInnerHTML={{ __html: pHtml }}
                     />
-
-                    {/* Watermark Page Badge in Margin */}
-                    <div className="absolute bottom-3 right-4 pointer-events-none no-print">
-                      <span className="text-[10px] font-mono text-zinc-400 bg-white/90 px-2 py-0.5 rounded border border-zinc-200 shadow-sm">
-                        Page {pageNum} of {pageCount}
-                      </span>
-                    </div>
-
-                    {/* Top Indicator if page > 1 */}
-                    {pageNum > 1 && (
-                      <div className="absolute top-2.5 left-4 pointer-events-none no-print">
-                        <span className="text-[9px] font-mono text-zinc-400 bg-zinc-50/90 px-1.5 py-0.5 rounded border border-zinc-200 shadow-sm">
-                          Page {pageNum}
-                        </span>
-                      </div>
-                    )}
                   </div>
                 );
               })}
@@ -689,7 +770,13 @@ export const ResumeStudioView: React.FC<ResumeStudioViewProps> = ({
       {typeof document !== 'undefined' && createPortal(
         <div className="print-portal-container" aria-hidden="true">
           <style dangerouslySetInnerHTML={{ __html: liveCss }} />
-          <div dangerouslySetInnerHTML={{ __html: liveHtml }} />
+          {(pageHtmls.length > 0 ? pageHtmls : [liveHtml]).map((pHtml, pIdx) => (
+            <div 
+              key={`print-page-${pIdx}`}
+              className="print-page-sheet"
+              dangerouslySetInnerHTML={{ __html: pHtml }}
+            />
+          ))}
         </div>,
         document.body
       )}

@@ -107,21 +107,25 @@ export function generateMinimalHTML(data: ResumeData): string {
           return String(b || '').trim();
         }).filter(b => b.length > 0);
 
+        const rawUrl = item.url ? item.url.trim() : '';
+        const href = rawUrl ? (rawUrl.startsWith('http://') || rawUrl.startsWith('https://') || rawUrl.startsWith('mailto:') ? rawUrl : 'https://' + rawUrl) : '';
+        const displayUrl = rawUrl ? rawUrl.replace(/^https?:\/\//i, '').replace(/\/$/, '') : '';
+        const urlLink = href ? ` | <a href="${escapeHtml(href)}" target="_blank" rel="noreferrer" class="entry-link">${escapeHtml(displayUrl)}</a>` : '';
+
         return `
         <div class="minimal-entry">
           <div class="entry-top">
             <span class="primary-text">
-              ${escapeHtml(item.title || '')}
-              ${item.url ? ` <a href="${escapeHtml(item.url)}" target="_blank" style="font-size: 8.5pt; font-weight: normal; color: #2563eb; text-decoration: none;">[Link]</a>` : ''}
+              <strong>${escapeHtml(item.title || '')}</strong>${urlLink}
             </span>
             <span class="meta-text">${escapeHtml([item.startDate, item.endDate].filter(Boolean).join(' — '))}</span>
           </div>
           ${item.subtitle ? `
             <div class="entry-sub">
-              <span class="secondary-text">${escapeHtml(item.subtitle)}</span>
+              <span class="secondary-text"><em>${escapeHtml(item.subtitle)}</em></span>
             </div>
           ` : ''}
-          ${item.description ? `<p style="margin: 2px 0 3px 0; font-size: 9pt; color: #4b5563;">${escapeHtml(item.description)}</p>` : ''}
+          ${item.description ? `<p class="entry-desc">${escapeHtml(item.description)}</p>` : ''}
           ${validBullets.length > 0 ? `
             <ul class="minimal-bullets">
               ${validBullets.map(b => `<li>${escapeHtml(b)}</li>`).join('')}
@@ -206,19 +210,21 @@ export const minimalCSS = `
 }
 
 .minimal-section {
-  margin-bottom: 14px;
+  margin-bottom: 12px;
 }
 
 .minimal-heading {
-  font-size: 11pt;
+  font-size: 10.5pt;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.6px;
   color: #09090b;
-  margin: 0 0 8px 0;
+  margin: 10px 0 6px 0;
   display: flex;
   align-items: center;
   gap: 8px;
+  break-after: avoid !important;
+  page-break-after: avoid !important;
 }
 
 .minimal-heading::after {
@@ -229,14 +235,16 @@ export const minimalCSS = `
 }
 
 .minimal-entry {
-  margin-bottom: 10px;
-  break-inside: avoid;
+  margin-bottom: 9px;
+  break-inside: avoid !important;
+  page-break-inside: avoid !important;
 }
 
 .entry-top {
   display: flex;
   justify-content: space-between;
   align-items: baseline;
+  gap: 8px;
 }
 
 .entry-top .primary-text {
@@ -249,6 +257,7 @@ export const minimalCSS = `
   font-size: 9pt;
   color: #71717a;
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 .entry-sub {
@@ -260,16 +269,34 @@ export const minimalCSS = `
   color: #52525b;
 }
 
+.entry-desc {
+  margin: 3px 0 4px 0;
+  font-size: 9.5pt;
+  color: #3f3f46;
+  line-height: 1.4;
+}
+
+.entry-link {
+  font-size: 8.5pt;
+  font-weight: normal;
+  color: #2563eb;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
 .minimal-bullets {
-  margin: 4px 0 0 0;
+  margin: 3px 0 0 0;
   padding-left: 16px;
   list-style-type: square;
 }
 
 .minimal-bullets li {
-  margin-bottom: 3px;
+  margin-bottom: 2.5px;
   font-size: 9.5pt;
   color: #27272a;
+  line-height: 1.4;
+  break-inside: avoid !important;
+  page-break-inside: avoid !important;
 }
 
 .minimal-skills {

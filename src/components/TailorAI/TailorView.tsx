@@ -115,7 +115,7 @@ export const TailorView: React.FC<TailorViewProps> = ({ onTailoredReady, onNavig
       id: 1,
       fullName: 'Alex Mercer',
       email: 'alex@example.com',
-      preferredTemplate: 'jake'
+      preferredTemplate: 'minimal'
     };
 
     const tailoredExperiences = matchedGroups.map(group => ({
