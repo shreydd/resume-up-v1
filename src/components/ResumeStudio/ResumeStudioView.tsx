@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import CodeMirror from '@uiw/react-codemirror';
 import type { EditorView } from '@codemirror/view';
 import { html } from '@codemirror/lang-html';
@@ -28,7 +29,9 @@ import {
   Scissors,
   AlertTriangle,
   FileText,
-  Layers
+  Layers,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 
 interface ResumeStudioViewProps {
@@ -71,67 +74,56 @@ export const ResumeStudioView: React.FC<ResumeStudioViewProps> = ({
   const canvasContainerRef = useRef<HTMLDivElement>(null);
   const editorViewRef = useRef<EditorView | null>(null);
   const probeRef = useRef<HTMLDivElement>(null);
+  const measureRef = useRef<HTMLDivElement>(null);
 
-  // Measure A4 page height and content bounds
+  // Measure natural unclipped resume height against A4 standard
   const measureSheet = () => {
-    if (!probeRef.current) return;
+    if (!probeRef.current || !measureRef.current) return;
     const probeHeight = probeRef.current.offsetHeight || 1122.5;
     setOnePagePx(probeHeight);
 
-    const sheetEl = document.querySelector('#resume-live-canvas .resume-sheet') as HTMLElement | null;
+    const sheetEl = measureRef.current.querySelector('.resume-sheet') as HTMLElement | null;
     if (!sheetEl) return;
 
-    let maxChildBottom = 0;
-    const allDescendants = sheetEl.querySelectorAll('header, section, div, p, ul, h1, h2, h3, li');
-    const sheetRect = sheetEl.getBoundingClientRect();
-    const currentScale = zoomLevel / 100;
-
-    allDescendants.forEach((node) => {
-      const el = node as HTMLElement;
-      if (el.closest('.page-guide-overlay')) return;
-      const rect = el.getBoundingClientRect();
-      const bottomRelative = (rect.bottom - sheetRect.top) / currentScale;
-      if (bottomRelative > maxChildBottom) {
-        maxChildBottom = bottomRelative;
-      }
-    });
-
-    // Add padding bottom buffer (~16mm in px ~ 60px)
-    const paddingBuffer = 60;
-    const actualHeight = Math.max(100, maxChildBottom + paddingBuffer);
-
-    const ratio = Math.max(0.1, actualHeight / probeHeight);
-    const count = Math.max(1, Math.ceil(actualHeight / probeHeight));
+    const measuredHeight = sheetEl.scrollHeight || sheetEl.offsetHeight;
+    const ratio = Math.max(0.1, measuredHeight / probeHeight);
+    // 15px subpixel tolerance
+    const count = Math.max(1, Math.ceil((measuredHeight - 15) / probeHeight));
 
     setOverflowRatio(Number(ratio.toFixed(2)));
     setPageCount(count);
   };
 
   const scrollToPage = (pageNum: number) => {
-    if (!canvasContainerRef.current) return;
-    const targetY = (pageNum - 1) * onePagePx * (zoomLevel / 100);
-    canvasContainerRef.current.scrollTo({
-      top: targetY,
-      behavior: 'smooth'
-    });
-    setActivePage(pageNum);
+    const clamped = Math.max(1, Math.min(pageCount, pageNum));
+    const targetEl = document.getElementById(`resume-page-${clamped}`);
+    if (targetEl && canvasContainerRef.current) {
+      targetEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      setActivePage(clamped);
+    }
   };
 
   const handleCanvasScroll = () => {
     if (!canvasContainerRef.current) return;
-    const scrollY = canvasContainerRef.current.scrollTop;
-    const pagePxZoomed = onePagePx * (zoomLevel / 100);
-    const currentPage = Math.min(pageCount, Math.max(1, Math.floor((scrollY + 50) / pagePxZoomed) + 1));
-    setActivePage(currentPage);
+    const containerRect = canvasContainerRef.current.getBoundingClientRect();
+    for (let i = 1; i <= pageCount; i++) {
+      const pageEl = document.getElementById(`resume-page-${i}`);
+      if (pageEl) {
+        const rect = pageEl.getBoundingClientRect();
+        if (rect.top <= containerRect.top + containerRect.height / 2 && rect.bottom > containerRect.top) {
+          setActivePage(i);
+        }
+      }
+    }
   };
 
-  // Re-measure when live content, css, or zoom changes
+  // Re-measure when live content or css changes
   useEffect(() => {
     const timer = setTimeout(() => {
       measureSheet();
-    }, 100);
+    }, 50);
 
-    const sheetEl = document.querySelector('#resume-live-canvas .resume-sheet');
+    const sheetEl = measureRef.current?.querySelector('.resume-sheet');
     if (sheetEl) {
       const ro = new ResizeObserver(() => {
         measureSheet();
@@ -143,7 +135,6 @@ export const ResumeStudioView: React.FC<ResumeStudioViewProps> = ({
       };
     }
 
-    // Also re-measure when fonts finish loading
     if (document.fonts?.ready) {
       document.fonts.ready.then(() => {
         measureSheet();
@@ -151,7 +142,7 @@ export const ResumeStudioView: React.FC<ResumeStudioViewProps> = ({
     }
 
     return () => clearTimeout(timer);
-  }, [liveHtml, liveCss, zoomLevel]);
+  }, [liveHtml, liveCss]);
 
   // Auto adjust default zoom when toggling split vs preview mode
   useEffect(() => {
@@ -361,15 +352,42 @@ export const ResumeStudioView: React.FC<ResumeStudioViewProps> = ({
 
         </div>
 
-        {/* Live Page Status & Guides Toggle */}
+        {/* Overleaf-Style Page Switcher & Status */}
         <div className="flex items-center gap-2">
+          {/* Overleaf < 1 / 2 > switcher */}
+          <div className="flex items-center gap-1 rounded-lg bg-zinc-100 p-0.5 border border-zinc-200 text-xs">
+            <button
+              type="button"
+              disabled={activePage <= 1}
+              onClick={() => scrollToPage(activePage - 1)}
+              className="p-1 text-zinc-600 hover:text-zinc-950 disabled:opacity-30 disabled:hover:bg-transparent rounded hover:bg-zinc-200/60 transition-colors cursor-pointer"
+              title="Previous Page"
+            >
+              <ChevronLeft className="h-3.5 w-3.5" />
+            </button>
+            
+            <span className="font-mono text-[11px] px-1.5 font-semibold text-zinc-800">
+              {activePage} / {pageCount}
+            </span>
+
+            <button
+              type="button"
+              disabled={activePage >= pageCount}
+              onClick={() => scrollToPage(activePage + 1)}
+              className="p-1 text-zinc-600 hover:text-zinc-950 disabled:opacity-30 disabled:hover:bg-transparent rounded hover:bg-zinc-200/60 transition-colors cursor-pointer"
+              title="Next Page"
+            >
+              <ChevronRight className="h-3.5 w-3.5" />
+            </button>
+          </div>
+
           {pageCount === 1 ? (
             <div 
               className="flex items-center gap-1.5 rounded-lg bg-emerald-50 border border-emerald-200 px-2.5 py-1 text-xs font-medium text-emerald-800 shadow-sm"
               title={`Single-page resume. Content utilizes ~${Math.round(overflowRatio * 100)}% of standard A4 height.`}
             >
               <FileCheck className="h-3.5 w-3.5 text-emerald-600" />
-              <span className="font-semibold">1 Page</span>
+              <span className="font-semibold hidden sm:inline">1 Page</span>
               <span className="text-[10px] font-mono text-emerald-700 bg-emerald-100/60 px-1 rounded">
                 {Math.round(overflowRatio * 100)}% full
               </span>
@@ -379,7 +397,7 @@ export const ResumeStudioView: React.FC<ResumeStudioViewProps> = ({
               type="button"
               onClick={() => scrollToPage(2)}
               className="flex items-center gap-1.5 rounded-lg bg-amber-50 border border-amber-300 px-2.5 py-1 text-xs font-semibold text-amber-900 shadow-sm hover:bg-amber-100 transition-all cursor-pointer group"
-              title="Warning: Content spills slightly onto Page 2. Click to jump to the page break line."
+              title="Warning: Content spills slightly onto Page 2. Click to jump to Page 2."
             >
               <AlertTriangle className="h-3.5 w-3.5 text-amber-600 group-hover:scale-110 transition-transform animate-pulse" />
               <span>~{overflowRatio} Pages</span>
@@ -399,22 +417,6 @@ export const ResumeStudioView: React.FC<ResumeStudioViewProps> = ({
               </span>
             </div>
           )}
-
-          {/* Toggle Guides Button */}
-          <button
-            type="button"
-            onClick={() => setShowPageGuides(prev => !prev)}
-            className={`flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-medium border transition-colors shadow-sm ${
-              showPageGuides
-                ? 'bg-indigo-50 border-indigo-200 text-indigo-700 hover:bg-indigo-100'
-                : 'bg-white border-zinc-200 text-zinc-600 hover:bg-zinc-50 hover:text-zinc-900'
-            }`}
-            title="Toggle visual page break guide lines and boundaries on preview canvas"
-          >
-            <Scissors className="h-3 w-3" />
-            <span className="hidden md:inline">Guides:</span>
-            <span className="font-semibold">{showPageGuides ? 'ON' : 'OFF'}</span>
-          </button>
         </div>
 
         {/* View Mode Toggle & Zoom */}
@@ -590,117 +592,64 @@ export const ResumeStudioView: React.FC<ResumeStudioViewProps> = ({
           </div>
         )}
 
-        {/* Right Pane: Live Render Canvas */}
+        {/* Right Pane: Live Render Canvas (Overleaf / LaTeX Style Discrete Pages) */}
         <div 
           ref={canvasContainerRef}
           onScroll={handleCanvasScroll}
-          className={`${viewMode === 'split' ? 'lg:col-span-6' : 'lg:col-span-12'} flex flex-col h-full min-h-0 min-w-0 overflow-auto bg-zinc-200/70 p-4 sm:p-8 relative`}
+          className={`${viewMode === 'split' ? 'lg:col-span-6' : 'lg:col-span-12'} flex flex-col h-full min-h-0 min-w-0 overflow-auto bg-[#525659] p-4 sm:p-8 relative`}
         >
-          <div className="w-fit min-w-full my-0 mx-auto pb-28 flex justify-center items-start">
+          <div className="w-fit min-w-full my-0 mx-auto pb-28 flex flex-col items-center">
             <div 
-              className="transition-transform duration-100 origin-top shadow-xl relative"
+              className="transition-transform duration-100 origin-top flex flex-col items-center gap-8"
               style={{ zoom: zoomLevel / 100 }}
             >
               {/* Inject dynamic CSS */}
               <style dangerouslySetInnerHTML={{ __html: liveCss }} />
-              
-              {/* Live rendered HTML container */}
-              <div 
-                id="resume-live-canvas"
-                style={{ ['--page-count' as any]: pageCount }}
-                dangerouslySetInnerHTML={{ __html: liveHtml }}
-              />
 
-              {/* Page Break & Boundary Visual Indicators */}
-              {showPageGuides && (
-                <div 
-                  className="page-guide-overlay pointer-events-none absolute inset-0 w-full no-print"
-                  style={{ height: `${pageCount * 297}mm` }}
-                >
-                  {/* Page number watermark tags for each page */}
-                  {Array.from({ length: pageCount }).map((_, idx) => {
-                    const pageNum = idx + 1;
-                    return (
-                      <div
-                        key={`page-tag-${pageNum}`}
-                        className="absolute left-3 flex items-center gap-1.5 rounded-md bg-zinc-900/80 text-white px-2 py-0.5 text-[10px] font-medium shadow-sm backdrop-blur border border-zinc-700/60 z-10"
-                        style={{ top: `${(pageNum - 1) * 297 + 5}mm` }}
-                      >
-                        <FileText className="h-2.5 w-2.5 text-indigo-400" />
-                        <span className="font-semibold tracking-wide">PAGE {pageNum}</span>
-                        <span className="text-[9px] text-zinc-300 font-mono">
-                          ({(pageNum - 1) * 297}–{pageNum * 297}mm)
+              {/* Discrete A4 Pages */}
+              {Array.from({ length: pageCount }).map((_, idx) => {
+                const pageNum = idx + 1;
+                return (
+                  <div
+                    key={`page-sheet-${pageNum}`}
+                    id={`resume-page-${pageNum}`}
+                    className="relative bg-white shadow-2xl transition-all rounded-[1px] select-text"
+                    style={{
+                      width: '210mm',
+                      height: '297mm',
+                      overflow: 'hidden',
+                      boxSizing: 'border-box'
+                    }}
+                  >
+                    {/* Content Slice for this Page */}
+                    <div
+                      style={{
+                        position: 'absolute',
+                        top: `-${idx * 297}mm`,
+                        left: 0,
+                        width: '210mm'
+                      }}
+                      dangerouslySetInnerHTML={{ __html: liveHtml }}
+                    />
+
+                    {/* Watermark Page Badge in Margin */}
+                    <div className="absolute bottom-3 right-4 pointer-events-none no-print">
+                      <span className="text-[10px] font-mono text-zinc-400 bg-white/90 px-2 py-0.5 rounded border border-zinc-200 shadow-sm">
+                        Page {pageNum} of {pageCount}
+                      </span>
+                    </div>
+
+                    {/* Top Indicator if page > 1 */}
+                    {pageNum > 1 && (
+                      <div className="absolute top-2.5 left-4 pointer-events-none no-print">
+                        <span className="text-[9px] font-mono text-zinc-400 bg-zinc-50/90 px-1.5 py-0.5 rounded border border-zinc-200 shadow-sm">
+                          Page {pageNum}
                         </span>
                       </div>
-                    );
-                  })}
-
-                  {/* Boundaries for every page */}
-                  {Array.from({ length: pageCount }).map((_, idx) => {
-                    const k = idx + 1;
-                    const isLast = k === pageCount;
-
-                    if (!isLast) {
-                      // Active Page Break between Page k and Page k+1
-                      return (
-                        <div
-                          key={`break-${k}`}
-                          className="absolute left-0 right-0 flex items-center justify-center -translate-y-1/2 z-20"
-                          style={{ top: `${k * 297}mm` }}
-                        >
-                          {/* Left scissor badge on sheet edge */}
-                          <div className="absolute -left-3.5 flex items-center justify-center h-7 w-7 rounded-full bg-rose-600 text-white shadow-md ring-2 ring-white">
-                            <Scissors className="h-3.5 w-3.5" />
-                          </div>
-
-                          {/* Dashed line across resume */}
-                          <div className="w-full border-t-2 border-dashed border-rose-500 shadow-sm" />
-
-                          {/* Center badge */}
-                          <div className="absolute flex items-center gap-2 rounded-full bg-rose-600 px-3.5 py-1 text-[11px] font-bold text-white shadow-lg ring-2 ring-white tracking-wide">
-                            <Scissors className="h-3 w-3" />
-                            <span>PAGE BREAK • Page {k} End / Page {k + 1} Start</span>
-                            <span className="bg-rose-700/80 rounded px-1.5 py-0.2 text-[10px] font-mono">
-                              ({k * 297}mm)
-                            </span>
-                          </div>
-
-                          {/* Right scissor badge on sheet edge */}
-                          <div className="absolute -right-3.5 flex items-center justify-center h-7 w-7 rounded-full bg-rose-600 text-white shadow-md ring-2 ring-white">
-                            <Scissors className="h-3.5 w-3.5 -scale-x-100" />
-                          </div>
-                        </div>
-                      );
-                    }
-
-                    // End of document boundary (Page 1 Limit or Page N Limit)
-                    return (
-                      <div
-                        key={`end-${k}`}
-                        className="absolute left-0 right-0 flex items-center justify-center -translate-y-1/2 z-20"
-                        style={{ top: `${k * 297}mm` }}
-                      >
-                        {k === 1 ? (
-                          <>
-                            <div className="w-full border-t-2 border-dashed border-emerald-500/80" />
-                            <div className="absolute flex items-center gap-1.5 rounded-full bg-emerald-600 px-3 py-0.5 text-[10px] font-semibold text-white shadow-md ring-2 ring-white">
-                              <Check className="h-3 w-3" />
-                              <span>Page 1 Boundary Limit (297mm) • {Math.round(overflowRatio * 100)}% Used</span>
-                            </div>
-                          </>
-                        ) : (
-                          <>
-                            <div className="w-full border-t border-dashed border-zinc-400/80" />
-                            <div className="absolute flex items-center gap-1.5 rounded-full bg-zinc-700 px-3 py-0.5 text-[10px] font-medium text-white shadow-sm ring-2 ring-white">
-                              <span>Page {k} End ({k * 297}mm) • ~{overflowRatio} A4 Total</span>
-                            </div>
-                          </>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </div>
 
@@ -731,11 +680,14 @@ export const ResumeStudioView: React.FC<ResumeStudioViewProps> = ({
 
       </div>
 
-      {/* HIDDEN PRINT-ONLY CONTAINER (for window.print vector output) */}
-      <div className="print-only-container hidden print:block">
-        <style dangerouslySetInnerHTML={{ __html: liveCss }} />
-        <div dangerouslySetInnerHTML={{ __html: liveHtml }} />
-      </div>
+      {/* DIRECT-CHILD PRINT PORTAL FOR CHROME PDF EXPORT (Zero parent overflow clipping) */}
+      {typeof document !== 'undefined' && createPortal(
+        <div className="print-portal-container" aria-hidden="true">
+          <style dangerouslySetInnerHTML={{ __html: liveCss }} />
+          <div dangerouslySetInnerHTML={{ __html: liveHtml }} />
+        </div>,
+        document.body
+      )}
 
       {/* SAVE RESUME MODAL */}
       <Modal
@@ -782,7 +734,27 @@ export const ResumeStudioView: React.FC<ResumeStudioViewProps> = ({
         onInsert={handleInsertSnippet}
       />
 
-      {/* Hidden A4 Height Measurement Probe */}
+      {/* Off-screen probe to measure natural unclipped content height */}
+      <div
+        ref={measureRef}
+        style={{
+          position: 'absolute',
+          top: -99999,
+          left: -99999,
+          width: '210mm',
+          visibility: 'hidden',
+          pointerEvents: 'none'
+        }}
+        aria-hidden="true"
+      >
+        <style dangerouslySetInnerHTML={{ __html: liveCss + '\n.measure-canvas .resume-sheet { min-height: 297mm !important; height: auto !important; box-shadow: none !important; }' }} />
+        <div 
+          className="measure-canvas"
+          dangerouslySetInnerHTML={{ __html: liveHtml }} 
+        />
+      </div>
+
+      {/* A4 Height Probe */}
       <div 
         ref={probeRef}
         style={{
@@ -791,8 +763,8 @@ export const ResumeStudioView: React.FC<ResumeStudioViewProps> = ({
           position: 'absolute',
           visibility: 'hidden',
           pointerEvents: 'none',
-          top: -9999,
-          left: -9999
+          top: -99999,
+          left: -99999
         }}
         aria-hidden="true"
       />

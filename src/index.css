@@ -36,57 +36,75 @@
 /* Screen Preview Container */
 .resume-sheet {
   width: 210mm;
-  min-height: calc(var(--page-count, 1) * 297mm);
+  min-height: 297mm;
   position: relative;
   background: white;
   margin: 0 auto;
-  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.08), 0 8px 10px -6px rgba(0, 0, 0, 0.04);
   box-sizing: border-box;
+}
+
+/* Screen: Hide the print portal container completely */
+.print-portal-container {
+  display: none;
 }
 
 /* Print & PDF Export Rules */
 @media print {
   @page {
-    size: A4;
+    size: A4 portrait;
     margin: 0; /* Zero page margin strips browser header/footer timestamps, titles & URLs */
   }
   
-  html, body, #root {
+  html, body {
     background: white !important;
     margin: 0 !important;
     padding: 0 !important;
     width: 100% !important;
     height: auto !important;
+    min-height: 0 !important;
     overflow: visible !important;
+  }
+
+  /* Completely hide the interactive React app */
+  #root {
+    display: none !important;
   }
 
   .no-print {
     display: none !important; /* Hides everything marked no-print */
   }
 
-  .print-only-container {
+  /* Direct-child print portal container */
+  .print-portal-container {
     display: block !important;
     position: static !important;
     margin: 0 !important;
     padding: 0 !important;
     width: 100% !important;
+    height: auto !important;
+    min-height: 0 !important;
     background: white !important;
+    overflow: visible !important;
   }
 
-  .print-only-container .resume-sheet {
+  .print-portal-container .resume-sheet {
     box-shadow: none !important;
     margin: 0 auto !important;
     width: 210mm !important;
     min-height: 297mm !important;
+    height: auto !important;
     box-sizing: border-box !important;
     padding: 15mm 18mm !important; /* Document margins are cleanly inside the sheet */
-    page-break-after: avoid;
+    overflow: visible !important;
+    page-break-after: auto !important;
+    break-after: auto !important;
   }
 
   .experience-block,
   .entry-block,
-  .minimal-entry {
-    break-inside: avoid !important; /* Prevents awkward page breaks */
+  .minimal-entry,
+  .section-title {
+    break-inside: avoid !important; /* Prevents awkward page breaks inside items */
     page-break-inside: avoid !important;
   }
 }
