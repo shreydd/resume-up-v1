@@ -539,7 +539,7 @@ export const ResumeStudioView: React.FC<ResumeStudioViewProps> = ({
                   type="button"
                   onClick={() => setIsInsertModalOpen(true)}
                   className="flex items-center gap-1 rounded bg-indigo-600 hover:bg-indigo-500 px-2 py-0.5 text-[11px] font-medium text-white shadow-sm transition-colors active:scale-95"
-                  title="Browse and insert text/bullets from Career Vault into editor (or double-click editor)"
+                  title="Browse and insert text/bullets from Career Vault into editor"
                 >
                   <Database className="h-3 w-3" />
                   <span>Insert from DB</span>
@@ -567,11 +567,7 @@ export const ResumeStudioView: React.FC<ResumeStudioViewProps> = ({
             </div>
 
             {/* CodeMirror Surface */}
-            <div 
-              className="flex-1 min-h-0 overflow-auto cursor-text"
-              onDoubleClick={() => setIsInsertModalOpen(true)}
-              title="Double-click to open Career Vault inserter"
-            >
+            <div className="flex-1 min-h-0 overflow-auto">
               <CodeMirror
                 onCreateEditor={(view) => {
                   editorViewRef.current = view;
