@@ -1,7 +1,7 @@
 import { ResumeData } from '../types';
 
 export function generateMinimalHTML(data: ResumeData): string {
-  const { profile, experiences, education, skills, certifications } = data;
+  const { profile, experiences, education, skills, certifications, customSections } = data;
 
   const contactItems: string[] = [];
   if (profile.email) contactItems.push(`<a href="mailto:${escapeHtml(profile.email)}">${escapeHtml(profile.email)}</a>`);
@@ -88,6 +88,37 @@ export function generateMinimalHTML(data: ResumeData): string {
     </section>
   ` : '';
 
+  const customSectionsHtml = (customSections || []).map(({ section, items }) => {
+    if (!items || items.length === 0) return '';
+    return `
+    <section class="minimal-section">
+      <h2 class="minimal-heading">${escapeHtml(section.title)}</h2>
+      ${items.map(item => `
+        <div class="minimal-entry">
+          <div class="entry-top">
+            <span class="primary-text">
+              ${escapeHtml(item.title)}
+              ${item.url ? ` <a href="${escapeHtml(item.url)}" target="_blank" style="font-size: 8.5pt; font-weight: normal; color: #2563eb; text-decoration: none;">[Link]</a>` : ''}
+            </span>
+            <span class="meta-text">${escapeHtml([item.startDate, item.endDate].filter(Boolean).join(' — '))}</span>
+          </div>
+          ${item.subtitle ? `
+            <div class="entry-sub">
+              <span class="secondary-text">${escapeHtml(item.subtitle)}</span>
+            </div>
+          ` : ''}
+          ${item.description ? `<p style="margin: 2px 0 3px 0; font-size: 9pt; color: #4b5563;">${escapeHtml(item.description)}</p>` : ''}
+          ${item.bullets && item.bullets.length > 0 ? `
+            <ul class="minimal-bullets">
+              ${item.bullets.map(b => `<li>${escapeHtml(b)}</li>`).join('')}
+            </ul>
+          ` : ''}
+        </div>
+      `).join('')}
+    </section>
+    `;
+  }).join('');
+
   return `
 <div class="resume-sheet minimal-template">
   <header class="minimal-header">
@@ -99,6 +130,7 @@ export function generateMinimalHTML(data: ResumeData): string {
   </header>
 
   ${experienceHtml}
+  ${customSectionsHtml}
   ${educationHtml}
   ${skillsHtml}
   ${certificationsHtml}

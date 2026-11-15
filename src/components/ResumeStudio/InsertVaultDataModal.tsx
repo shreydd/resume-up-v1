@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../../db';
-import { Experience } from '../../types';
+import { Experience, CustomSection, CustomSectionItem } from '../../types';
 import { Modal } from '../Shared/Modal';
 import { 
   Search, 
@@ -13,7 +13,9 @@ import {
   User, 
   Tag, 
   Code,
-  FileText
+  FileText,
+  FolderPlus,
+  ExternalLink
 } from 'lucide-react';
 
 interface InsertVaultDataModalProps {
@@ -22,7 +24,7 @@ interface InsertVaultDataModalProps {
   onInsert: (snippet: string) => void;
 }
 
-type TabType = 'achievements' | 'experiences' | 'skills' | 'education' | 'profile';
+type TabType = 'achievements' | 'experiences' | 'custom' | 'skills' | 'education' | 'profile';
 
 export const InsertVaultDataModal: React.FC<InsertVaultDataModalProps> = ({
   isOpen,
@@ -34,6 +36,8 @@ export const InsertVaultDataModal: React.FC<InsertVaultDataModalProps> = ({
   const skills = useLiveQuery(() => db.skills.toArray());
   const educations = useLiveQuery(() => db.education.toArray());
   const profileList = useLiveQuery(() => db.profile.toArray());
+  const customSections = useLiveQuery(() => db.customSections?.toArray());
+  const customItems = useLiveQuery(() => db.customSectionItems?.toArray());
 
   const profile = profileList?.[0];
 
@@ -51,6 +55,17 @@ export const InsertVaultDataModal: React.FC<InsertVaultDataModalProps> = ({
     }
     return map;
   }, [experiences]);
+
+  // Map of section ID to custom section
+  const sectionMap = useMemo(() => {
+    const map = new Map<string, CustomSection>();
+    if (customSections) {
+      for (const s of customSections) {
+        map.set(s.id, s);
+      }
+    }
+    return map;
+  }, [customSections]);
 
   // Filtered achievements
   const filteredAchievements = useMemo(() => {
@@ -97,6 +112,52 @@ export const InsertVaultDataModal: React.FC<InsertVaultDataModalProps> = ({
         (edu.fieldOfStudy && edu.fieldOfStudy.toLowerCase().includes(searchQuery.toLowerCase()));
     });
   }, [educations, searchQuery]);
+
+  // Filtered custom items
+  const filteredCustomItems = useMemo(() => {
+    if (!customItems) return [];
+    return customItems.filter(it => {
+      const sec = sectionMap.get(it.sectionId);
+      const matchSearch = searchQuery === '' ||
+        it.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (it.subtitle && it.subtitle.toLowerCase().includes(searchQuery.toLowerCase())) ||
+        (it.description && it.description.toLowerCase().includes(searchQuery.toLowerCase())) ||
+        (sec && sec.title.toLowerCase().includes(searchQuery.toLowerCase())) ||
+        (it.bullets && it.bullets.some(b => b.toLowerCase().includes(searchQuery.toLowerCase())));
+      return matchSearch;
+    });
+  }, [customItems, sectionMap, searchQuery]);
+
+  const handleInsertCustomItem = (item: CustomSectionItem) => {
+    if (formatMode === 'html') {
+      const dates = [item.startDate, item.endDate].filter(Boolean).join(' – ');
+      const titleLink = item.url
+        ? `<a href="${item.url}" target="_blank"><strong>${escapeHtml(item.title)}</strong></a>`
+        : `<strong>${escapeHtml(item.title)}</strong>`;
+
+      const snippet = `
+<div class="entry-block custom-block">
+  <div class="row-header">
+    <span class="title">${titleLink}</span>
+    <span class="dates"><em>${escapeHtml(dates)}</em></span>
+  </div>
+  ${item.subtitle ? `<div class="row-sub"><span class="subtitle"><em>${escapeHtml(item.subtitle)}</em></span></div>` : ''}
+  ${item.description ? `<p class="entry-desc">${escapeHtml(item.description)}</p>` : ''}
+  ${item.bullets && item.bullets.length > 0 ? `<ul class="bullet-list">
+    ${item.bullets.map(b => `<li>${escapeHtml(b)}</li>`).join('\n    ')}
+  </ul>` : ''}
+</div>`.trim();
+      onInsert(snippet);
+    } else {
+      const dates = [item.startDate, item.endDate].filter(Boolean).join(' – ');
+      const bulletText = item.bullets && item.bullets.length > 0
+        ? '\n' + item.bullets.map(b => `• ${b}`).join('\n')
+        : '';
+      const snippet = `${item.title}${item.subtitle ? ` (${item.subtitle})` : ''}${dates ? ` [${dates}]` : ''}${item.url ? ` - ${item.url}` : ''}${bulletText}`;
+      onInsert(snippet);
+    }
+    onClose();
+  };
 
   const handleInsertAchievement = (achText: string) => {
     const snippet = formatMode === 'html'
@@ -254,6 +315,18 @@ export const InsertVaultDataModal: React.FC<InsertVaultDataModalProps> = ({
           </button>
 
           <button
+            onClick={() => setActiveTab('custom')}
+            className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-all ${
+              activeTab === 'custom'
+                ? 'bg-zinc-900 text-white shadow-sm'
+                : 'text-zinc-600 hover:bg-zinc-100'
+            }`}
+          >
+            <FolderPlus className="h-3.5 w-3.5" />
+            <span>Custom Sections ({customItems?.length || 0})</span>
+          </button>
+
+          <button
             onClick={() => setActiveTab('skills')}
             className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-all ${
               activeTab === 'skills'
@@ -366,6 +439,61 @@ export const InsertVaultDataModal: React.FC<InsertVaultDataModalProps> = ({
                       <Plus className="h-3 w-3" />
                       <span>Insert Block</span>
                     </button>
+                  </div>
+                );
+              })
+            )
+          )}
+
+          {/* TAB: CUSTOM SECTIONS */}
+          {activeTab === 'custom' && (
+            filteredCustomItems.length === 0 ? (
+              <p className="text-center text-xs text-zinc-400 py-8">No custom section items found.</p>
+            ) : (
+              filteredCustomItems.map(item => {
+                const sec = sectionMap.get(item.sectionId);
+                const dates = [item.startDate, item.endDate].filter(Boolean).join(' – ');
+                return (
+                  <div
+                    key={item.id}
+                    className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 rounded-xl border border-zinc-200 bg-white p-3.5 hover:border-zinc-300 hover:bg-zinc-50 transition-all"
+                  >
+                    <div className="flex-1 space-y-1">
+                      <div className="flex items-center gap-2">
+                        {sec && (
+                          <span className="text-[10px] font-semibold uppercase px-2 py-0.5 rounded-md bg-zinc-100 text-zinc-600 border border-zinc-200">
+                            {sec.title}
+                          </span>
+                        )}
+                        <h4 className="font-semibold text-xs text-zinc-900">{item.title}</h4>
+                      </div>
+                      {item.subtitle && (
+                        <p className="text-xs text-zinc-600 font-medium">{item.subtitle}</p>
+                      )}
+                      <div className="flex items-center gap-3 text-[11px] text-zinc-400">
+                        {dates && <span>{dates}</span>}
+                        {item.location && <span>{item.location}</span>}
+                        {item.url && (
+                          <span className="text-indigo-600 truncate max-w-xs">{item.url}</span>
+                        )}
+                      </div>
+                      {item.bullets && item.bullets.length > 0 && (
+                        <p className="text-[11px] text-zinc-500 italic mt-0.5">
+                          {item.bullets.length} bullet point{item.bullets.length === 1 ? '' : 's'} included
+                        </p>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-1.5 self-end sm:self-center flex-shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => handleInsertCustomItem(item)}
+                        className="flex items-center gap-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 px-3 py-1.5 text-xs font-medium text-white transition-colors"
+                      >
+                        <Plus className="h-3 w-3" />
+                        <span>Insert Item</span>
+                      </button>
+                    </div>
                   </div>
                 );
               })

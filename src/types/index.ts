@@ -52,6 +52,25 @@ export interface Certification {
   url?: string;
 }
 
+export interface CustomSection {
+  id: string; // e.g. "sec-projects" or UUID
+  title: string; // e.g. "Projects", "Extra-Curriculars", "Publications"
+  order?: number;
+}
+
+export interface CustomSectionItem {
+  id: string; // UUID
+  sectionId: string; // references CustomSection.id
+  title: string; // e.g. "Distributed KV Store", "Robotics Club Lead"
+  subtitle?: string; // e.g. "Go, Raft, gRPC", "Stanford Robotics Club"
+  startDate?: string;
+  endDate?: string;
+  location?: string;
+  url?: string;
+  description?: string;
+  bullets: string[];
+}
+
 export interface TailoredResume {
   id: string;
   title: string;
@@ -85,4 +104,8 @@ export interface ResumeData {
   education: Education[];
   skills: Skill[];
   certifications: Certification[];
+  customSections?: {
+    section: CustomSection;
+    items: CustomSectionItem[];
+  }[];
 }

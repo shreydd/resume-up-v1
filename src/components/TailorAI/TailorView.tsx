@@ -59,6 +59,8 @@ export const TailorView: React.FC<TailorViewProps> = ({ onTailoredReady, onNavig
   const education = useLiveQuery(() => db.education.toArray());
   const skills = useLiveQuery(() => db.skills.toArray());
   const certifications = useLiveQuery(() => db.certifications.toArray());
+  const customSections = useLiveQuery(() => db.customSections?.orderBy('order').toArray());
+  const customSectionItems = useLiveQuery(() => db.customSectionItems?.toArray());
 
   const [jobDescription, setJobDescription] = useState<string>('');
   const [topPerRole, setTopPerRole] = useState<number>(3);
@@ -123,12 +125,18 @@ export const TailorView: React.FC<TailorViewProps> = ({ onTailoredReady, onNavig
         .map(item => item.achievement)
     })).filter(group => group.achievements.length > 0);
 
+    const packagedCustomSections = (customSections || []).map(sec => ({
+      section: sec,
+      items: (customSectionItems || []).filter(it => it.sectionId === sec.id)
+    }));
+
     const tailoredData: ResumeData = {
       profile,
       experiences: tailoredExperiences,
       education: education || [],
       skills: skills || [],
-      certifications: certifications || []
+      certifications: certifications || [],
+      customSections: packagedCustomSections
     };
 
     onTailoredReady(tailoredData, jobDescription);

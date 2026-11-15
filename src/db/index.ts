@@ -7,6 +7,8 @@ import {
   Education,
   Skill,
   Certification,
+  CustomSection,
+  CustomSectionItem,
   TailoredResume,
   ResumeData
 } from '../types';
@@ -19,6 +21,8 @@ export class CareerVaultDB extends Dexie {
   skills!: Table<Skill, string>;
   certifications!: Table<Certification, string>;
   tailoredResumes!: Table<TailoredResume, string>;
+  customSections!: Table<CustomSection, string>;
+  customSectionItems!: Table<CustomSectionItem, string>;
 
   constructor() {
     super('ResumeUpCareerVault');
@@ -30,6 +34,18 @@ export class CareerVaultDB extends Dexie {
       skills: 'id, category, name',
       certifications: 'id, name',
       tailoredResumes: 'id, templateId, createdAt, updatedAt'
+    });
+
+    this.version(2).stores({
+      profile: '++id',
+      experiences: 'id, company, role, startDate',
+      achievements: 'id, experienceId, category',
+      education: 'id, institution',
+      skills: 'id, category, name',
+      certifications: 'id, name',
+      tailoredResumes: 'id, templateId, createdAt, updatedAt',
+      customSections: 'id, title, order',
+      customSectionItems: 'id, sectionId, title'
     });
   }
 }
@@ -143,6 +159,48 @@ export const SAMPLE_DATA = {
       issueDate: "2023",
       url: "https://aws.amazon.com/verification"
     }
+  ],
+  customSections: [
+    {
+      id: "sec-projects",
+      title: "Projects",
+      order: 1
+    },
+    {
+      id: "sec-extracurriculars",
+      title: "Extra-Curricular Activities",
+      order: 2
+    }
+  ],
+  customSectionItems: [
+    {
+      id: "item-proj-1",
+      sectionId: "sec-projects",
+      title: "Distributed KV Store",
+      subtitle: "Go, Raft Consensus, gRPC",
+      startDate: "2023-01",
+      endDate: "2023-05",
+      url: "https://github.com/alexmercer/raft-kv",
+      description: "Fault-tolerant distributed key-value storage engine implementing the Raft consensus protocol.",
+      bullets: [
+        "Implemented Raft leader election, log replication, and snapshotting in Go with sub-10ms failover.",
+        "Benchmarked system throughput reaching 45,000 requests/sec with linearizability guarantees."
+      ]
+    },
+    {
+      id: "item-extra-1",
+      sectionId: "sec-extracurriculars",
+      title: "Open Source Maintainer & Mentor",
+      subtitle: "Austin Developer Community",
+      startDate: "2021-03",
+      endDate: "Present",
+      url: "https://github.com/alexmercer",
+      description: "Active open-source contributor and technical mentor.",
+      bullets: [
+        "Maintained top 50 developer utility repositories on GitHub with over 1,200 stars.",
+        "Organized bi-weekly systems programming study groups and mentored 15+ aspiring engineers."
+      ]
+    }
   ]
 };
 
@@ -153,7 +211,9 @@ export async function loadSampleData(): Promise<void> {
     db.achievements,
     db.education,
     db.skills,
-    db.certifications
+    db.certifications,
+    db.customSections,
+    db.customSectionItems
   ], async () => {
     await db.profile.clear();
     await db.experiences.clear();
@@ -161,6 +221,8 @@ export async function loadSampleData(): Promise<void> {
     await db.education.clear();
     await db.skills.clear();
     await db.certifications.clear();
+    await db.customSections.clear();
+    await db.customSectionItems.clear();
 
     await db.profile.put(SAMPLE_DATA.profile);
     await db.experiences.bulkPut(SAMPLE_DATA.experiences);
@@ -168,6 +230,8 @@ export async function loadSampleData(): Promise<void> {
     await db.education.bulkPut(SAMPLE_DATA.education);
     await db.skills.bulkPut(SAMPLE_DATA.skills);
     await db.certifications.bulkPut(SAMPLE_DATA.certifications);
+    await db.customSections.bulkPut(SAMPLE_DATA.customSections);
+    await db.customSectionItems.bulkPut(SAMPLE_DATA.customSectionItems);
   });
 }
 
@@ -178,7 +242,9 @@ export async function clearVault(): Promise<void> {
     db.achievements,
     db.education,
     db.skills,
-    db.certifications
+    db.certifications,
+    db.customSections,
+    db.customSectionItems
   ], async () => {
     await db.profile.clear();
     await db.experiences.clear();
@@ -186,6 +252,8 @@ export async function clearVault(): Promise<void> {
     await db.education.clear();
     await db.skills.clear();
     await db.certifications.clear();
+    await db.customSections.clear();
+    await db.customSectionItems.clear();
   });
 }
 
@@ -203,10 +271,17 @@ export async function getCompleteResumeData(): Promise<ResumeData> {
   const education = await db.education.toArray();
   const skills = await db.skills.toArray();
   const certifications = await db.certifications.toArray();
+  const customSections = await db.customSections.orderBy('order').toArray();
+  const customItems = await db.customSectionItems.toArray();
 
   const groupedExperiences = experiences.map(exp => ({
     experience: exp,
     achievements: achievements.filter(ach => ach.experienceId === exp.id)
+  }));
+
+  const groupedCustomSections = customSections.map(sec => ({
+    section: sec,
+    items: customItems.filter(item => item.sectionId === sec.id)
   }));
 
   return {
@@ -214,7 +289,8 @@ export async function getCompleteResumeData(): Promise<ResumeData> {
     experiences: groupedExperiences,
     education,
     skills,
-    certifications
+    certifications,
+    customSections: groupedCustomSections
   };
 }
 
@@ -225,6 +301,8 @@ export async function exportVaultAsJSON(): Promise<string> {
   const education = await db.education.toArray();
   const skills = await db.skills.toArray();
   const certifications = await db.certifications.toArray();
+  const customSections = await db.customSections.orderBy('order').toArray();
+  const customItems = await db.customSectionItems.toArray();
 
   // Format to match sample_data/career_template.json conventions
   const exportPayload = {
@@ -264,7 +342,38 @@ export async function exportVaultAsJSON(): Promise<string> {
       issuer: cert.issuer,
       issue_date: cert.issueDate,
       url: cert.url
-    }))
+    })),
+    custom_sections: customSections.map(sec => ({
+      id: sec.id,
+      title: sec.title,
+      order: sec.order,
+      items: customItems
+        .filter(item => item.sectionId === sec.id)
+        .map(item => ({
+          title: item.title,
+          subtitle: item.subtitle,
+          start_date: item.startDate,
+          end_date: item.endDate,
+          location: item.location,
+          url: item.url,
+          description: item.description,
+          bullets: item.bullets
+        }))
+    })),
+    // Standard top-level projects for JSON Resume compatibility
+    projects: customItems
+      .filter(item => {
+        const sec = customSections.find(s => s.id === item.sectionId);
+        return sec && sec.title.toLowerCase().includes('project');
+      })
+      .map(item => ({
+        name: item.title,
+        description: item.description || item.subtitle,
+        highlights: item.bullets,
+        url: item.url,
+        start_date: item.startDate,
+        end_date: item.endDate
+      }))
   };
 
   return JSON.stringify(exportPayload, null, 2);
@@ -279,7 +388,9 @@ export async function importVaultFromJSON(jsonString: string): Promise<void> {
     db.achievements,
     db.education,
     db.skills,
-    db.certifications
+    db.certifications,
+    db.customSections,
+    db.customSectionItems
   ], async () => {
     if (data.profile) {
       const p = data.profile;
@@ -360,46 +471,159 @@ export async function importVaultFromJSON(jsonString: string): Promise<void> {
         });
       }
     }
+
+    // 1. Explicit custom_sections or customSections
+    const incomingCustom = data.custom_sections || data.customSections;
+    if (Array.isArray(incomingCustom)) {
+      for (let i = 0; i < incomingCustom.length; i++) {
+        const cs = incomingCustom[i];
+        const secId = cs.id || `sec-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+        await db.customSections.put({
+          id: secId,
+          title: cs.title || "Custom Section",
+          order: cs.order ?? (i + 1)
+        });
+
+        const items = cs.items || [];
+        for (const item of items) {
+          await db.customSectionItems.put({
+            id: `item-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+            sectionId: secId,
+            title: item.title || item.name || "Item",
+            subtitle: item.subtitle || item.role || item.technologies || "",
+            startDate: item.start_date || item.startDate || "",
+            endDate: item.end_date || item.endDate || "",
+            location: item.location || "",
+            url: item.url || item.link || "",
+            description: item.description || item.summary || "",
+            bullets: Array.isArray(item.bullets) ? item.bullets : (Array.isArray(item.highlights) ? item.highlights : (item.description ? [item.description] : []))
+          });
+        }
+      }
+    }
+
+    // 2. Standard top-level projects
+    if (Array.isArray(data.projects) && (!incomingCustom || !incomingCustom.some((s: any) => (s.title || '').toLowerCase().includes('project')))) {
+      const secId = `sec-projects-${Date.now()}`;
+      await db.customSections.put({
+        id: secId,
+        title: "Projects",
+        order: 1
+      });
+      for (const p of data.projects) {
+        await db.customSectionItems.put({
+          id: `item-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+          sectionId: secId,
+          title: p.name || p.title || "Project",
+          subtitle: p.subtitle || p.technologies || p.role || "",
+          startDate: p.startDate || p.start_date || "",
+          endDate: p.endDate || p.end_date || "",
+          url: p.url || "",
+          description: p.description || "",
+          bullets: Array.isArray(p.highlights) ? p.highlights : (Array.isArray(p.bullets) ? p.bullets : (p.description ? [p.description] : []))
+        });
+      }
+    }
+
+    // 3. Standard top-level extracurriculars / activities
+    const extraList = data.extracurriculars || data.extra_curriculars || data.activities;
+    if (Array.isArray(extraList) && (!incomingCustom || !incomingCustom.some((s: any) => (s.title || '').toLowerCase().includes('extra')))) {
+      const secId = `sec-extra-${Date.now()}`;
+      await db.customSections.put({
+        id: secId,
+        title: "Extra-Curricular Activities",
+        order: 2
+      });
+      for (const e of extraList) {
+        await db.customSectionItems.put({
+          id: `item-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+          sectionId: secId,
+          title: e.name || e.title || "Activity",
+          subtitle: e.role || e.subtitle || e.organization || "",
+          startDate: e.startDate || e.start_date || "",
+          endDate: e.endDate || e.end_date || "",
+          url: e.url || "",
+          description: e.description || "",
+          bullets: Array.isArray(e.highlights) ? e.highlights : (Array.isArray(e.bullets) ? e.bullets : (e.description ? [e.description] : []))
+        });
+      }
+    }
   });
 }
 
 export async function exportVaultAsCSV(): Promise<string> {
   const experiences = await db.experiences.toArray();
   const achievements = await db.achievements.toArray();
+  const customSections = await db.customSections.toArray();
+  const customItems = await db.customSectionItems.toArray();
 
   const rows: Array<{
-    Company: string;
-    Role: string;
+    Section: string;
+    Title: string;
+    Subtitle: string;
     Location: string;
     StartDate: string;
     EndDate: string;
-    Achievement: string;
-    Category: string;
+    Bullet: string;
+    URL: string;
   }> = [];
 
   for (const exp of experiences) {
     const expAchs = achievements.filter(a => a.experienceId === exp.id);
     if (expAchs.length === 0) {
       rows.push({
-        Company: exp.company,
-        Role: exp.role,
+        Section: 'Experience',
+        Title: exp.company,
+        Subtitle: exp.role,
         Location: exp.location || '',
         StartDate: exp.startDate,
         EndDate: exp.endDate || (exp.isCurrent ? 'Present' : ''),
-        Achievement: '',
-        Category: ''
+        Bullet: '',
+        URL: ''
       });
     } else {
       for (const ach of expAchs) {
         rows.push({
-          Company: exp.company,
-          Role: exp.role,
+          Section: 'Experience',
+          Title: exp.company,
+          Subtitle: exp.role,
           Location: exp.location || '',
           StartDate: exp.startDate,
           EndDate: exp.endDate || (exp.isCurrent ? 'Present' : ''),
-          Achievement: ach.originalText,
-          Category: ach.category || ''
+          Bullet: ach.originalText,
+          URL: ''
         });
+      }
+    }
+  }
+
+  for (const sec of customSections) {
+    const items = customItems.filter(i => i.sectionId === sec.id);
+    for (const item of items) {
+      if (!item.bullets || item.bullets.length === 0) {
+        rows.push({
+          Section: sec.title,
+          Title: item.title,
+          Subtitle: item.subtitle || '',
+          Location: item.location || '',
+          StartDate: item.startDate || '',
+          EndDate: item.endDate || '',
+          Bullet: item.description || '',
+          URL: item.url || ''
+        });
+      } else {
+        for (const bullet of item.bullets) {
+          rows.push({
+            Section: sec.title,
+            Title: item.title,
+            Subtitle: item.subtitle || '',
+            Location: item.location || '',
+            StartDate: item.startDate || '',
+            EndDate: item.endDate || '',
+            Bullet: bullet,
+            URL: item.url || ''
+          });
+        }
       }
     }
   }
@@ -407,7 +631,7 @@ export async function exportVaultAsCSV(): Promise<string> {
   return Papa.unparse(rows);
 }
 
-export async function importVaultFromCSV(csvText: string): Promise<{ experiencesCount: number; achievementsCount: number }> {
+export async function importVaultFromCSV(csvText: string): Promise<{ experiencesCount: number; achievementsCount: number; customItemsCount: number }> {
   return new Promise((resolve, reject) => {
     Papa.parse<Record<string, string>>(csvText, {
       header: true,
@@ -416,9 +640,10 @@ export async function importVaultFromCSV(csvText: string): Promise<{ experiences
         try {
           let experiencesCount = 0;
           let achievementsCount = 0;
+          let customItemsCount = 0;
 
-          // Group by company + role + startDate
-          const grouped = new Map<string, {
+          // Group experiences by company + role + startDate
+          const expGrouped = new Map<string, {
             company: string;
             role: string;
             location: string;
@@ -427,39 +652,76 @@ export async function importVaultFromCSV(csvText: string): Promise<{ experiences
             achievements: { text: string; category?: string }[];
           }>();
 
+          // Group custom sections by sectionTitle + itemTitle + startDate
+          const customGrouped = new Map<string, {
+            sectionTitle: string;
+            title: string;
+            subtitle: string;
+            location: string;
+            startDate: string;
+            endDate: string;
+            url: string;
+            bullets: string[];
+          }>();
+
           for (const row of results.data) {
-            const company = (row.Company || row.company || '').trim();
-            const role = (row.Role || row.role || '').trim();
+            const section = (row.Section || row.section || '').trim();
+            const company = (row.Company || row.company || row.Title || row.title || '').trim();
+            const role = (row.Role || row.role || row.Subtitle || row.subtitle || '').trim();
             const location = (row.Location || row.location || '').trim();
             const startDate = (row.StartDate || row.start_date || '').trim();
             const endDate = (row.EndDate || row.end_date || '').trim();
-            const achievement = (row.Achievement || row.achievement || '').trim();
+            const achievement = (row.Achievement || row.achievement || row.Bullet || row.bullet || '').trim();
             const category = (row.Category || row.category || '').trim();
+            const url = (row.URL || row.url || '').trim();
 
             if (!company && !role && !achievement) continue;
 
-            const key = `${company.toLowerCase()}|||${role.toLowerCase()}|||${startDate}`;
-            if (!grouped.has(key)) {
-              grouped.set(key, {
-                company: company || 'Company',
-                role: role || 'Role',
-                location,
-                startDate,
-                endDate,
-                achievements: []
-              });
-            }
+            const isCustom = section && !section.toLowerCase().includes('experience');
 
-            if (achievement) {
-              grouped.get(key)!.achievements.push({
-                text: achievement,
-                category: category || undefined
-              });
+            if (!isCustom) {
+              const key = `${company.toLowerCase()}|||${role.toLowerCase()}|||${startDate}`;
+              if (!expGrouped.has(key)) {
+                expGrouped.set(key, {
+                  company: company || 'Company',
+                  role: role || 'Role',
+                  location,
+                  startDate,
+                  endDate,
+                  achievements: []
+                });
+              }
+
+              if (achievement) {
+                expGrouped.get(key)!.achievements.push({
+                  text: achievement,
+                  category: category || undefined
+                });
+              }
+            } else {
+              const key = `${section.toLowerCase()}|||${company.toLowerCase()}|||${startDate}`;
+              if (!customGrouped.has(key)) {
+                customGrouped.set(key, {
+                  sectionTitle: section,
+                  title: company,
+                  subtitle: role,
+                  location,
+                  startDate,
+                  endDate,
+                  url,
+                  bullets: []
+                });
+              }
+
+              if (achievement) {
+                customGrouped.get(key)!.bullets.push(achievement);
+              }
             }
           }
 
-          await db.transaction('rw', [db.experiences, db.achievements], async () => {
-            for (const [, group] of grouped) {
+          await db.transaction('rw', [db.experiences, db.achievements, db.customSections, db.customSectionItems], async () => {
+            // Save experiences
+            for (const [, group] of expGrouped) {
               const expId = `exp-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
               const isCurrent = group.endDate.toLowerCase().includes('present');
 
@@ -484,9 +746,43 @@ export async function importVaultFromCSV(csvText: string): Promise<{ experiences
                 achievementsCount++;
               }
             }
+
+            // Save custom sections & items
+            const existingSections = await db.customSections.toArray();
+            const sectionMap = new Map<string, string>();
+            for (const s of existingSections) {
+              sectionMap.set(s.title.toLowerCase(), s.id);
+            }
+
+            for (const [, group] of customGrouped) {
+              let secId = sectionMap.get(group.sectionTitle.toLowerCase());
+              if (!secId) {
+                secId = `sec-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+                await db.customSections.put({
+                  id: secId,
+                  title: group.sectionTitle,
+                  order: sectionMap.size + 1
+                });
+                sectionMap.set(group.sectionTitle.toLowerCase(), secId);
+              }
+
+              await db.customSectionItems.put({
+                id: `item-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+                sectionId: secId,
+                title: group.title,
+                subtitle: group.subtitle,
+                location: group.location,
+                startDate: group.startDate,
+                endDate: group.endDate,
+                url: group.url,
+                description: '',
+                bullets: group.bullets
+              });
+              customItemsCount++;
+            }
           });
 
-          resolve({ experiencesCount, achievementsCount });
+          resolve({ experiencesCount, achievementsCount, customItemsCount });
         } catch (err) {
           reject(err);
         }

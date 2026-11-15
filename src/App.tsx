@@ -17,6 +17,7 @@ export const App: React.FC = () => {
   const [windowWidth, setWindowWidth] = useState(typeof window !== 'undefined' ? window.innerWidth : 1280);
 
   const experiences = useLiveQuery(() => db.experiences.toArray());
+  const customItems = useLiveQuery(() => db.customSectionItems?.toArray());
   const savedResumes = useLiveQuery(() => db.tailoredResumes.toArray());
 
   // Monitor window width for screen resolution guard
@@ -39,14 +40,14 @@ export const App: React.FC = () => {
     initVault();
   }, []);
 
-  // Whenever experiences change in DB, update our current resume data unless currently tailoring
+  // Whenever experiences or custom items change in DB, update our current resume data
   useEffect(() => {
     async function refresh() {
       const data = await getCompleteResumeData();
       setCurrentResumeData(data);
     }
     refresh();
-  }, [experiences?.length]);
+  }, [experiences?.length, customItems?.length]);
 
   const handleTailoredReady = (tailoredData: ResumeData, targetJdText: string) => {
     setActiveSavedResume(null);

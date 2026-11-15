@@ -9,7 +9,16 @@ import {
   exportVaultAsCSV, 
   importVaultFromCSV 
 } from '../../db';
-import { Profile, Experience, Achievement, Education, Skill, Certification } from '../../types';
+import { 
+  Profile, 
+  Experience, 
+  Achievement, 
+  Education, 
+  Skill, 
+  Certification,
+  CustomSection,
+  CustomSectionItem
+} from '../../types';
 import { Modal } from '../Shared/Modal';
 import { 
   Plus, 
@@ -28,7 +37,10 @@ import {
   Calendar, 
   MapPin, 
   Tag,
-  AlertTriangle
+  AlertTriangle,
+  FolderPlus,
+  ExternalLink,
+  List
 } from 'lucide-react';
 
 export const VaultManager: React.FC = () => {
@@ -38,6 +50,8 @@ export const VaultManager: React.FC = () => {
   const educations = useLiveQuery(() => db.education.toArray());
   const skills = useLiveQuery(() => db.skills.toArray());
   const certifications = useLiveQuery(() => db.certifications.toArray());
+  const customSections = useLiveQuery(() => db.customSections?.orderBy('order').toArray());
+  const customItems = useLiveQuery(() => db.customSectionItems?.toArray());
 
   const profile = profileList?.[0] || {
     id: 1,
@@ -52,12 +66,32 @@ export const VaultManager: React.FC = () => {
     preferredTemplate: 'jake'
   };
 
-  const [activeSection, setActiveSection] = useState<'profile' | 'experience' | 'education' | 'skills' | 'certifications'>('experience');
+  const [activeSection, setActiveSection] = useState<'profile' | 'experience' | 'custom' | 'education' | 'skills' | 'certifications'>('experience');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   // File input refs for import
   const csvInputRef = useRef<HTMLInputElement>(null);
   const jsonInputRef = useRef<HTMLInputElement>(null);
+
+  // Custom Section Modal States
+  const [isSectionModalOpen, setIsSectionModalOpen] = useState(false);
+  const [editingSection, setEditingSection] = useState<CustomSection | null>(null);
+  const [sectionTitleInput, setSectionTitleInput] = useState('');
+
+  // Custom Item Modal States
+  const [isItemModalOpen, setIsItemModalOpen] = useState(false);
+  const [editingItem, setEditingItem] = useState<CustomSectionItem | null>(null);
+  const [targetSectionId, setTargetSectionId] = useState<string>('');
+  const [itemFormData, setItemFormData] = useState({
+    title: '',
+    subtitle: '',
+    startDate: '',
+    endDate: '',
+    location: '',
+    url: '',
+    description: '',
+    bullets: ['']
+  });
 
   // Modal states
   const [isExpModalOpen, setIsExpModalOpen] = useState(false);
@@ -426,6 +460,149 @@ export const VaultManager: React.FC = () => {
     showToast('Certification removed');
   };
 
+  // Custom Section Handlers
+  const openAddSection = (presetTitle?: string) => {
+    setEditingSection(null);
+    setSectionTitleInput(presetTitle || '');
+    setIsSectionModalOpen(true);
+  };
+
+  const openEditSection = (sec: CustomSection) => {
+    setEditingSection(sec);
+    setSectionTitleInput(sec.title);
+    setIsSectionModalOpen(true);
+  };
+
+  const handleSaveSection = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!sectionTitleInput.trim()) return;
+
+    if (editingSection) {
+      await db.customSections.update(editingSection.id, {
+        title: sectionTitleInput.trim()
+      });
+      showToast('Section title updated');
+    } else {
+      const newId = `sec-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+      const currentCount = await db.customSections.count();
+      await db.customSections.put({
+        id: newId,
+        title: sectionTitleInput.trim(),
+        order: currentCount + 1
+      });
+      showToast(`Created section "${sectionTitleInput.trim()}"`);
+    }
+    setIsSectionModalOpen(false);
+  };
+
+  const handleDeleteSection = async (secId: string, title: string) => {
+    if (confirm(`Delete custom section "${title}" and all its items?`)) {
+      await db.customSections.delete(secId);
+      await db.customSectionItems.where('sectionId').equals(secId).delete();
+      showToast(`Deleted section "${title}"`);
+    }
+  };
+
+  // Custom Item Handlers
+  const openAddItem = (secId: string) => {
+    setTargetSectionId(secId);
+    setEditingItem(null);
+    setItemFormData({
+      title: '',
+      subtitle: '',
+      startDate: '',
+      endDate: '',
+      location: '',
+      url: '',
+      description: '',
+      bullets: ['']
+    });
+    setIsItemModalOpen(true);
+  };
+
+  const openEditItem = (item: CustomSectionItem) => {
+    setTargetSectionId(item.sectionId);
+    setEditingItem(item);
+    setItemFormData({
+      title: item.title,
+      subtitle: item.subtitle || '',
+      startDate: item.startDate || '',
+      endDate: item.endDate || '',
+      location: item.location || '',
+      url: item.url || '',
+      description: item.description || '',
+      bullets: item.bullets && item.bullets.length > 0 ? [...item.bullets] : ['']
+    });
+    setIsItemModalOpen(true);
+  };
+
+  const handleSaveItem = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!itemFormData.title.trim()) return;
+
+    const cleanBullets = itemFormData.bullets
+      .map(b => b.trim())
+      .filter(b => b.length > 0);
+
+    if (editingItem) {
+      await db.customSectionItems.update(editingItem.id, {
+        title: itemFormData.title.trim(),
+        subtitle: itemFormData.subtitle.trim() || undefined,
+        startDate: itemFormData.startDate.trim() || undefined,
+        endDate: itemFormData.endDate.trim() || undefined,
+        location: itemFormData.location.trim() || undefined,
+        url: itemFormData.url.trim() || undefined,
+        description: itemFormData.description.trim() || undefined,
+        bullets: cleanBullets
+      });
+      showToast('Item updated');
+    } else {
+      const newId = `item-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+      await db.customSectionItems.put({
+        id: newId,
+        sectionId: targetSectionId,
+        title: itemFormData.title.trim(),
+        subtitle: itemFormData.subtitle.trim() || undefined,
+        startDate: itemFormData.startDate.trim() || undefined,
+        endDate: itemFormData.endDate.trim() || undefined,
+        location: itemFormData.location.trim() || undefined,
+        url: itemFormData.url.trim() || undefined,
+        description: itemFormData.description.trim() || undefined,
+        bullets: cleanBullets
+      });
+      showToast('Item added');
+    }
+    setIsItemModalOpen(false);
+  };
+
+  const handleDeleteItem = async (itemId: string) => {
+    await db.customSectionItems.delete(itemId);
+    showToast('Item deleted');
+  };
+
+  // Bullet management within item modal
+  const handleAddBulletInput = () => {
+    setItemFormData(prev => ({
+      ...prev,
+      bullets: [...prev.bullets, '']
+    }));
+  };
+
+  const handleUpdateBulletInput = (idx: number, val: string) => {
+    setItemFormData(prev => {
+      const updated = [...prev.bullets];
+      updated[idx] = val;
+      return { ...prev, bullets: updated };
+    });
+  };
+
+  const handleRemoveBulletInput = (idx: number) => {
+    setItemFormData(prev => ({
+      ...prev,
+      bullets: prev.bullets.filter((_, i) => i !== idx)
+    }));
+  };
+
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 no-print">
       {/* Toast */}
@@ -626,6 +803,25 @@ export const VaultManager: React.FC = () => {
                 activeSection === 'certifications' ? 'bg-zinc-800 text-zinc-200' : 'bg-zinc-200 text-zinc-700'
               }`}>
                 {certifications?.length || 0}
+              </span>
+            </button>
+
+            <button
+              onClick={() => setActiveSection('custom')}
+              className={`flex items-center justify-between w-full rounded-xl px-3.5 py-2.5 text-sm font-medium transition-all ${
+                activeSection === 'custom'
+                  ? 'bg-zinc-900 text-white shadow-sm'
+                  : 'text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900'
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
+                <FolderPlus className="h-4 w-4" />
+                <span>Custom Sections</span>
+              </div>
+              <span className={`text-xs font-mono rounded-full px-2 py-0.5 ${
+                activeSection === 'custom' ? 'bg-zinc-800 text-zinc-200' : 'bg-zinc-200 text-zinc-700'
+              }`}>
+                {customItems?.length || 0}
               </span>
             </button>
           </nav>
@@ -1035,6 +1231,200 @@ export const VaultManager: React.FC = () => {
             </div>
           )}
 
+          {/* SECTION: CUSTOM SECTIONS (Projects, Extracurriculars, Publications, etc.) */}
+          {activeSection === 'custom' && (
+            <div className="space-y-6">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                  <h2 className="text-lg font-semibold text-zinc-900">Custom Sections</h2>
+                  <p className="text-xs text-zinc-500">
+                    Add custom sections like Projects, Extra-Curriculars, Publications, Leadership, or Awards.
+                  </p>
+                </div>
+                <button
+                  onClick={() => openAddSection()}
+                  className="flex items-center gap-1.5 rounded-lg bg-zinc-900 px-3.5 py-2 text-xs font-medium text-white shadow-sm hover:bg-zinc-800 transition-colors"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  <span>Add Section</span>
+                </button>
+              </div>
+
+              {/* Quick Preset Buttons if user wants to add popular sections */}
+              <div className="flex flex-wrap items-center gap-2 p-3 bg-zinc-50 rounded-xl border border-zinc-200">
+                <span className="text-[11px] font-semibold text-zinc-500 uppercase tracking-wider">Quick Presets:</span>
+                {[
+                  'Projects',
+                  'Extra-Curricular Activities',
+                  'Publications',
+                  'Leadership & Volunteering',
+                  'Awards & Honors'
+                ].map((preset) => {
+                  const alreadyExists = customSections?.some(s => s.title.toLowerCase() === preset.toLowerCase());
+                  return (
+                    <button
+                      key={preset}
+                      type="button"
+                      onClick={() => openAddSection(preset)}
+                      className={`text-xs px-2.5 py-1 rounded-lg border transition-all ${
+                        alreadyExists
+                          ? 'border-zinc-200 bg-zinc-100 text-zinc-400 cursor-default'
+                          : 'border-zinc-200 bg-white text-zinc-700 hover:border-zinc-400 hover:bg-zinc-50 shadow-xs'
+                      }`}
+                      disabled={alreadyExists}
+                    >
+                      + {preset}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Sections List */}
+              {(!customSections || customSections.length === 0) ? (
+                <div className="rounded-2xl border border-dashed border-zinc-300 p-12 text-center">
+                  <FolderPlus className="mx-auto h-10 w-10 text-zinc-400" />
+                  <h3 className="mt-3 text-sm font-semibold text-zinc-800">No Custom Sections Yet</h3>
+                  <p className="mt-1 text-xs text-zinc-500 max-w-sm mx-auto">
+                    Create sections like Projects, Extra-Curriculars, or Publications to enrich your resume and match specific job requirements.
+                  </p>
+                  <button
+                    onClick={() => openAddSection('Projects')}
+                    className="mt-4 inline-flex items-center gap-1.5 rounded-lg bg-zinc-900 px-4 py-2 text-xs font-medium text-white hover:bg-zinc-800 shadow-sm transition-colors"
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                    <span>Create "Projects" Section</span>
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-6">
+                  {customSections.map((sec) => {
+                    const secItems = customItems?.filter(it => it.sectionId === sec.id) || [];
+                    return (
+                      <div
+                        key={sec.id}
+                        className="rounded-2xl border border-zinc-200 bg-white shadow-sm overflow-hidden"
+                      >
+                        {/* Section Card Header */}
+                        <div className="flex items-center justify-between border-b border-zinc-100 bg-zinc-50/70 px-5 py-3.5">
+                          <div className="flex items-center gap-2.5">
+                            <span className="font-semibold text-sm text-zinc-900">{sec.title}</span>
+                            <span className="rounded-full bg-zinc-200/80 px-2 py-0.5 text-[11px] font-mono text-zinc-700">
+                              {secItems.length} {secItems.length === 1 ? 'item' : 'items'}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => openAddItem(sec.id)}
+                              className="flex items-center gap-1 rounded-lg bg-white border border-zinc-200 px-2.5 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-50 shadow-xs transition-colors"
+                            >
+                              <Plus className="h-3 w-3 text-zinc-500" />
+                              <span>Add Item</span>
+                            </button>
+                            <button
+                              onClick={() => openEditSection(sec)}
+                              className="rounded-lg p-1.5 text-zinc-400 hover:bg-zinc-200/60 hover:text-zinc-600 transition-colors"
+                              title="Edit Section Name"
+                            >
+                              <Edit3 className="h-3.5 w-3.5" />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteSection(sec.id, sec.title)}
+                              className="rounded-lg p-1.5 text-zinc-400 hover:bg-rose-50 hover:text-rose-600 transition-colors"
+                              title="Delete Section"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Section Items */}
+                        <div className="p-4 space-y-3">
+                          {secItems.length === 0 ? (
+                            <div className="py-6 text-center text-xs text-zinc-400 border border-dashed border-zinc-200 rounded-xl">
+                              No entries in this section yet. Click "+ Add Item" above.
+                            </div>
+                          ) : (
+                            secItems.map(item => (
+                              <div
+                                key={item.id}
+                                className="rounded-xl border border-zinc-200 bg-white p-4 shadow-xs hover:border-zinc-300 transition-colors space-y-2"
+                              >
+                                <div className="flex items-start justify-between gap-4">
+                                  <div>
+                                    <div className="flex items-center gap-2">
+                                      <h4 className="font-semibold text-sm text-zinc-900">{item.title}</h4>
+                                      {item.url && (
+                                        <a
+                                          href={item.url}
+                                          target="_blank"
+                                          rel="noreferrer"
+                                          className="text-xs text-indigo-600 hover:underline flex items-center gap-0.5"
+                                        >
+                                          <ExternalLink className="h-3 w-3" />
+                                          <span>Link</span>
+                                        </a>
+                                      )}
+                                    </div>
+                                    {item.subtitle && (
+                                      <p className="text-xs text-zinc-600 font-medium mt-0.5">{item.subtitle}</p>
+                                    )}
+                                    <div className="flex items-center gap-3 text-[11px] text-zinc-400 mt-1">
+                                      {[item.startDate, item.endDate].filter(Boolean).length > 0 && (
+                                        <span className="flex items-center gap-1">
+                                          <Calendar className="h-3 w-3" />
+                                          {[item.startDate, item.endDate].filter(Boolean).join(' – ')}
+                                        </span>
+                                      )}
+                                      {item.location && (
+                                        <span className="flex items-center gap-1">
+                                          <MapPin className="h-3 w-3" />
+                                          {item.location}
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+
+                                  <div className="flex items-center gap-1 flex-shrink-0">
+                                    <button
+                                      onClick={() => openEditItem(item)}
+                                      className="rounded-lg p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 transition-colors"
+                                    >
+                                      <Edit3 className="h-3.5 w-3.5" />
+                                    </button>
+                                    <button
+                                      onClick={() => handleDeleteItem(item.id)}
+                                      className="rounded-lg p-1.5 text-zinc-400 hover:bg-rose-50 hover:text-rose-600 transition-colors"
+                                    >
+                                      <Trash2 className="h-3.5 w-3.5" />
+                                    </button>
+                                  </div>
+                                </div>
+
+                                {item.description && (
+                                  <p className="text-xs text-zinc-600 pt-1 leading-relaxed">{item.description}</p>
+                                )}
+
+                                {item.bullets && item.bullets.length > 0 && (
+                                  <ul className="mt-2 space-y-1 pl-4 border-l-2 border-zinc-100 text-xs text-zinc-600 list-disc list-inside">
+                                    {item.bullets.map((b, idx) => (
+                                      <li key={idx} className="leading-relaxed">
+                                        <span className="text-zinc-700">{b}</span>
+                                      </li>
+                                    ))}
+                                  </ul>
+                                )}
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
         </div>
       </div>
 
@@ -1384,6 +1774,218 @@ export const VaultManager: React.FC = () => {
               className="rounded-lg bg-zinc-900 px-4 py-2 text-xs font-medium text-white hover:bg-zinc-800"
             >
               Save Certification
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* MODAL: CUSTOM SECTION (Add/Edit) */}
+      <Modal
+        isOpen={isSectionModalOpen}
+        onClose={() => setIsSectionModalOpen(false)}
+        title={editingSection ? 'Edit Section Title' : 'Create Custom Section'}
+        description="Add a new section category for your career vault and resume."
+      >
+        <form onSubmit={handleSaveSection} className="space-y-4">
+          <div>
+            <label className="block text-xs font-semibold text-zinc-700 mb-1">Section Title *</label>
+            <input
+              type="text"
+              required
+              value={sectionTitleInput}
+              onChange={e => setSectionTitleInput(e.target.value)}
+              placeholder="e.g. Projects, Extra-Curricular Activities, Publications..."
+              className="w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm focus:border-zinc-900 focus:outline-none"
+              autoFocus
+            />
+          </div>
+
+          <div>
+            <label className="block text-[11px] font-semibold text-zinc-500 uppercase tracking-wider mb-2">Preset Suggestions</label>
+            <div className="flex flex-wrap gap-1.5">
+              {[
+                'Projects',
+                'Extra-Curricular Activities',
+                'Publications',
+                'Leadership & Volunteering',
+                'Awards & Honors',
+                'Open Source Contributions',
+                'Speaking Engagements'
+              ].map(preset => (
+                <button
+                  key={preset}
+                  type="button"
+                  onClick={() => setSectionTitleInput(preset)}
+                  className={`text-xs px-2.5 py-1 rounded-lg border transition-all ${
+                    sectionTitleInput === preset
+                      ? 'border-zinc-900 bg-zinc-900 text-white font-medium'
+                      : 'border-zinc-200 bg-zinc-50 text-zinc-700 hover:bg-zinc-100'
+                  }`}
+                >
+                  {preset}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="mt-6 flex justify-end gap-2 border-t border-zinc-100 pt-4">
+            <button
+              type="button"
+              onClick={() => setIsSectionModalOpen(false)}
+              className="rounded-lg border border-zinc-200 px-4 py-2 text-xs font-medium text-zinc-700 hover:bg-zinc-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="rounded-lg bg-zinc-900 px-4 py-2 text-xs font-medium text-white hover:bg-zinc-800"
+            >
+              {editingSection ? 'Update Section' : 'Create Section'}
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* MODAL: CUSTOM SECTION ITEM (Add/Edit) */}
+      <Modal
+        isOpen={isItemModalOpen}
+        onClose={() => setIsItemModalOpen(false)}
+        title={editingItem ? 'Edit Section Item' : 'Add Item to Section'}
+        description="Provide details, links, and bullet points for this section entry."
+        maxWidth="max-w-2xl"
+      >
+        <form onSubmit={handleSaveItem} className="space-y-4">
+          <div>
+            <label className="block text-xs font-semibold text-zinc-700 mb-1">Title / Name *</label>
+            <input
+              type="text"
+              required
+              value={itemFormData.title}
+              onChange={e => setItemFormData({ ...itemFormData, title: e.target.value })}
+              placeholder="e.g. Distributed Key-Value Store, Hackathon Winner, IEEE Paper..."
+              className="w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm focus:border-zinc-900 focus:outline-none"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-zinc-700 mb-1">Subtitle / Role / Technologies</label>
+            <input
+              type="text"
+              value={itemFormData.subtitle}
+              onChange={e => setItemFormData({ ...itemFormData, subtitle: e.target.value })}
+              placeholder="e.g. Go, Raft, gRPC, Docker or President / Lead Organizer"
+              className="w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm focus:border-zinc-900 focus:outline-none"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-semibold text-zinc-700 mb-1">Start Date</label>
+              <input
+                type="text"
+                value={itemFormData.startDate}
+                onChange={e => setItemFormData({ ...itemFormData, startDate: e.target.value })}
+                placeholder="2023-01"
+                className="w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm focus:border-zinc-900 focus:outline-none"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-zinc-700 mb-1">End Date</label>
+              <input
+                type="text"
+                value={itemFormData.endDate}
+                onChange={e => setItemFormData({ ...itemFormData, endDate: e.target.value })}
+                placeholder="2023-06 or Present"
+                className="w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm focus:border-zinc-900 focus:outline-none"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-semibold text-zinc-700 mb-1">Location</label>
+              <input
+                type="text"
+                value={itemFormData.location}
+                onChange={e => setItemFormData({ ...itemFormData, location: e.target.value })}
+                placeholder="San Francisco, CA or Remote"
+                className="w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm focus:border-zinc-900 focus:outline-none"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-zinc-700 mb-1">Project / Verification URL</label>
+              <input
+                type="url"
+                value={itemFormData.url}
+                onChange={e => setItemFormData({ ...itemFormData, url: e.target.value })}
+                placeholder="https://github.com/..."
+                className="w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm focus:border-zinc-900 focus:outline-none"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-zinc-700 mb-1">Description / Summary (Optional)</label>
+            <textarea
+              rows={2}
+              value={itemFormData.description}
+              onChange={e => setItemFormData({ ...itemFormData, description: e.target.value })}
+              placeholder="Brief summary or context..."
+              className="w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm focus:border-zinc-900 focus:outline-none"
+            />
+          </div>
+
+          {/* Bullet Points */}
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="block text-xs font-semibold text-zinc-700">Bullet Points / Key Contributions</label>
+              <button
+                type="button"
+                onClick={handleAddBulletInput}
+                className="flex items-center gap-1 text-xs text-zinc-600 hover:text-zinc-900 font-medium"
+              >
+                <Plus className="h-3 w-3" />
+                <span>Add Bullet</span>
+              </button>
+            </div>
+            <div className="space-y-2">
+              {itemFormData.bullets.map((b, idx) => (
+                <div key={idx} className="flex items-start gap-2">
+                  <span className="text-xs text-zinc-400 mt-2.5 font-mono">{idx + 1}.</span>
+                  <textarea
+                    rows={2}
+                    value={b}
+                    onChange={e => handleUpdateBulletInput(idx, e.target.value)}
+                    placeholder="Action verb + context + measurable result..."
+                    className="flex-1 rounded-lg border border-zinc-200 px-3 py-1.5 text-xs focus:border-zinc-900 focus:outline-none"
+                  />
+                  {itemFormData.bullets.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveBulletInput(idx)}
+                      className="mt-2 rounded-lg p-1 text-zinc-400 hover:bg-rose-50 hover:text-rose-600"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="mt-6 flex justify-end gap-2 border-t border-zinc-100 pt-4">
+            <button
+              type="button"
+              onClick={() => setIsItemModalOpen(false)}
+              className="rounded-lg border border-zinc-200 px-4 py-2 text-xs font-medium text-zinc-700 hover:bg-zinc-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="rounded-lg bg-zinc-900 px-4 py-2 text-xs font-medium text-white hover:bg-zinc-800"
+            >
+              {editingItem ? 'Update Item' : 'Add Item'}
             </button>
           </div>
         </form>

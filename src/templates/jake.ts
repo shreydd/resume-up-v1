@@ -1,7 +1,7 @@
 import { ResumeData } from '../types';
 
 export function generateJakeHTML(data: ResumeData): string {
-  const { profile, experiences, education, skills, certifications } = data;
+  const { profile, experiences, education, skills, certifications, customSections } = data;
 
   const contactItems: string[] = [];
   if (profile.phone) contactItems.push(`<span>${escapeHtml(profile.phone)}</span>`);
@@ -90,6 +90,33 @@ export function generateJakeHTML(data: ResumeData): string {
     </section>
   ` : '';
 
+  const customSectionsHtml = (customSections || []).map(({ section, items }) => {
+    if (!items || items.length === 0) return '';
+    return `
+    <section class="section">
+      <h2 class="section-title">${escapeHtml(section.title.toUpperCase())}</h2>
+      ${items.map(item => `
+        <div class="entry-block">
+          <div class="row-header">
+            <span class="company">
+              <strong>${escapeHtml(item.title)}</strong>
+              ${item.subtitle ? ` | <em>${escapeHtml(item.subtitle)}</em>` : ''}
+              ${item.url ? ` <a href="${escapeHtml(item.url)}" target="_blank" class="cert-link">[Link]</a>` : ''}
+            </span>
+            <span class="dates">${escapeHtml([item.startDate, item.endDate].filter(Boolean).join(' – '))}</span>
+          </div>
+          ${item.description ? `<p class="project-desc" style="margin: 2px 0 3px 0; font-size: 10pt; color: #333;">${escapeHtml(item.description)}</p>` : ''}
+          ${item.bullets && item.bullets.length > 0 ? `
+            <ul class="bullet-list">
+              ${item.bullets.map(b => `<li>${escapeHtml(b)}</li>`).join('')}
+            </ul>
+          ` : ''}
+        </div>
+      `).join('')}
+    </section>
+    `;
+  }).join('');
+
   return `
 <div class="resume-sheet jake-template">
   <header class="header">
@@ -102,6 +129,7 @@ export function generateJakeHTML(data: ResumeData): string {
 
   ${educationHtml}
   ${experienceHtml}
+  ${customSectionsHtml}
   ${skillsHtml}
   ${certificationsHtml}
 </div>
