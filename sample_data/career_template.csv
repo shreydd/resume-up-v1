@@ -1,0 +1,7 @@
+Company,Role,Location,StartDate,EndDate,Achievement,Category
+Acme Corporation,Senior Software Engineer,"San Francisco, CA",2022-01,Present,"Architected high-throughput event processing pipeline handling 50M daily events using Kafka and Go.",Backend
+Acme Corporation,Senior Software Engineer,"San Francisco, CA",2022-01,Present,"Reduced p99 API latency by 35% through Redis caching and PostgreSQL query optimization.",Performance
+Acme Corporation,Senior Software Engineer,"San Francisco, CA",2022-01,Present,"Mentored 4 junior and mid-level engineers, running weekly technical design reviews.",Leadership
+Starlight Systems,Full Stack Developer,"Austin, TX",2019-06,2021-12,"Built responsive React client dashboard adopted by 120,000 monthly active enterprise users.",Frontend
+Starlight Systems,Full Stack Developer,"Austin, TX",2019-06,2021-12,"Designed and implemented automated CI/CD pipeline using GitHub Actions, cutting release cycles from 2 weeks to daily.",DevOps
+Starlight Systems,Full Stack Developer,"Austin, TX",2019-06,2021-12,"Spearheaded OAuth2 and RBAC migration across 8 core services ensuring SOC-2 compliance.",Security

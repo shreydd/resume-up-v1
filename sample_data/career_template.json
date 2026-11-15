@@ -1,0 +1,69 @@
+{
+  "profile": {
+    "full_name": "Alex Mercer",
+    "headline": "Senior Full Stack & Systems Engineer",
+    "email": "alex.mercer@example.com",
+    "phone": "+1 (555) 234-5678",
+    "location": "San Francisco, CA",
+    "website": "https://alexmercer.dev",
+    "linkedin": "linkedin.com/in/alexmercer",
+    "github": "github.com/alexmercer"
+  },
+  "experiences": [
+    {
+      "company": "Acme Corporation",
+      "role": "Senior Software Engineer",
+      "location": "San Francisco, CA",
+      "start_date": "2022-01",
+      "end_date": "Present",
+      "achievements": [
+        "Architected high-throughput event processing pipeline handling 50M daily events using Kafka and Go.",
+        "Reduced p99 API latency by 35% through Redis caching and PostgreSQL query optimization.",
+        "Mentored 4 junior and mid-level engineers, running weekly technical design reviews."
+      ]
+    },
+    {
+      "company": "Starlight Systems",
+      "role": "Full Stack Developer",
+      "location": "Austin, TX",
+      "start_date": "2019-06",
+      "end_date": "2021-12",
+      "achievements": [
+        "Built responsive React client dashboard adopted by 120,000 monthly active enterprise users.",
+        "Designed and implemented automated CI/CD pipeline using GitHub Actions, cutting release cycles from 2 weeks to daily.",
+        "Spearheaded OAuth2 and RBAC migration across 8 core services ensuring SOC-2 compliance."
+      ]
+    }
+  ],
+  "education": [
+    {
+      "institution": "University of Texas at Austin",
+      "degree": "B.S. in Computer Science",
+      "field_of_study": "Software Engineering",
+      "start_date": "2015",
+      "end_date": "2019"
+    }
+  ],
+  "skills": [
+    {
+      "category": "Languages",
+      "name": "TypeScript, JavaScript, Go, Python, SQL"
+    },
+    {
+      "category": "Frameworks & Libraries",
+      "name": "React, Next.js, Node.js, Express, Tailwind CSS"
+    },
+    {
+      "category": "Cloud & Tools",
+      "name": "Docker, Kubernetes, AWS, PostgreSQL, Redis, Kafka, Git"
+    }
+  ],
+  "certifications": [
+    {
+      "name": "AWS Certified Solutions Architect – Associate",
+      "issuer": "Amazon Web Services",
+      "issue_date": "2023",
+      "url": "https://aws.amazon.com/verification"
+    }
+  ]
+}

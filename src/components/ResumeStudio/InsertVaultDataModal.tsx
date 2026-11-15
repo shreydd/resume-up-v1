@@ -1,0 +1,482 @@
+import React, { useState, useMemo } from 'react';
+import { useLiveQuery } from 'dexie-react-hooks';
+import { db } from '../../db';
+import { Experience } from '../../types';
+import { Modal } from '../Shared/Modal';
+import { 
+  Search, 
+  Plus, 
+  Briefcase, 
+  Check, 
+  Wrench, 
+  GraduationCap, 
+  User, 
+  Tag, 
+  Code,
+  FileText
+} from 'lucide-react';
+
+interface InsertVaultDataModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onInsert: (snippet: string) => void;
+}
+
+type TabType = 'achievements' | 'experiences' | 'skills' | 'education' | 'profile';
+
+export const InsertVaultDataModal: React.FC<InsertVaultDataModalProps> = ({
+  isOpen,
+  onClose,
+  onInsert
+}) => {
+  const experiences = useLiveQuery(() => db.experiences.toArray());
+  const achievements = useLiveQuery(() => db.achievements.toArray());
+  const skills = useLiveQuery(() => db.skills.toArray());
+  const educations = useLiveQuery(() => db.education.toArray());
+  const profileList = useLiveQuery(() => db.profile.toArray());
+
+  const profile = profileList?.[0];
+
+  const [activeTab, setActiveTab] = useState<TabType>('achievements');
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [formatMode, setFormatMode] = useState<'html' | 'raw'>('html');
+
+  // Map of experience ID to experience for fast lookup
+  const expMap = useMemo(() => {
+    const map = new Map<string, Experience>();
+    if (experiences) {
+      for (const exp of experiences) {
+        map.set(exp.id, exp);
+      }
+    }
+    return map;
+  }, [experiences]);
+
+  // Filtered achievements
+  const filteredAchievements = useMemo(() => {
+    if (!achievements) return [];
+    return achievements.filter(ach => {
+      const exp = expMap.get(ach.experienceId);
+      const matchSearch = searchQuery === '' || 
+        ach.originalText.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (ach.category && ach.category.toLowerCase().includes(searchQuery.toLowerCase())) ||
+        (exp && exp.company.toLowerCase().includes(searchQuery.toLowerCase())) ||
+        (exp && exp.role.toLowerCase().includes(searchQuery.toLowerCase()));
+      return matchSearch;
+    });
+  }, [achievements, expMap, searchQuery]);
+
+  // Filtered experiences
+  const filteredExperiences = useMemo(() => {
+    if (!experiences) return [];
+    return experiences.filter(exp => {
+      return searchQuery === '' ||
+        exp.company.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        exp.role.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (exp.location && exp.location.toLowerCase().includes(searchQuery.toLowerCase()));
+    });
+  }, [experiences, searchQuery]);
+
+  // Filtered skills
+  const filteredSkills = useMemo(() => {
+    if (!skills) return [];
+    return skills.filter(s => {
+      return searchQuery === '' ||
+        s.category.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        s.name.toLowerCase().includes(searchQuery.toLowerCase());
+    });
+  }, [skills, searchQuery]);
+
+  // Filtered educations
+  const filteredEducations = useMemo(() => {
+    if (!educations) return [];
+    return educations.filter(edu => {
+      return searchQuery === '' ||
+        edu.institution.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        edu.degree.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (edu.fieldOfStudy && edu.fieldOfStudy.toLowerCase().includes(searchQuery.toLowerCase()));
+    });
+  }, [educations, searchQuery]);
+
+  const handleInsertAchievement = (achText: string) => {
+    const snippet = formatMode === 'html'
+      ? `<li>${escapeHtml(achText)}</li>`
+      : achText;
+    onInsert(snippet);
+    onClose();
+  };
+
+  const handleInsertExperience = (expId: string) => {
+    const exp = expMap.get(expId);
+    if (!exp) return;
+
+    const expAchs = achievements?.filter(a => a.experienceId === expId) || [];
+
+    if (formatMode === 'html') {
+      const snippet = `
+<div class="entry-block experience-block">
+  <div class="row-header">
+    <span class="company"><strong>${escapeHtml(exp.company)}</strong></span>
+    <span class="location"><strong>${escapeHtml(exp.location || '')}</strong></span>
+  </div>
+  <div class="row-sub">
+    <span class="role"><em>${escapeHtml(exp.role)}</em></span>
+    <span class="dates"><em>${escapeHtml([exp.startDate, exp.endDate || (exp.isCurrent ? 'Present' : '')].filter(Boolean).join(' – '))}</em></span>
+  </div>
+  <ul class="bullet-list">
+    ${expAchs.map(a => `<li>${escapeHtml(a.originalText)}</li>`).join('\n    ')}
+  </ul>
+</div>`.trim();
+      onInsert(snippet);
+    } else {
+      const bulletText = expAchs.map(a => `• ${a.originalText}`).join('\n');
+      const snippet = `${exp.role} @ ${exp.company} (${exp.startDate} – ${exp.endDate || (exp.isCurrent ? 'Present' : '')})\n${bulletText}`;
+      onInsert(snippet);
+    }
+    onClose();
+  };
+
+  const handleInsertSkill = (s: { category: string; name: string }) => {
+    const snippet = formatMode === 'html'
+      ? `<li><strong>${escapeHtml(s.category)}:</strong> ${escapeHtml(s.name)}</li>`
+      : `${s.category}: ${s.name}`;
+    onInsert(snippet);
+    onClose();
+  };
+
+  const handleInsertEducation = (edu: { institution: string; degree: string; fieldOfStudy?: string; startDate?: string; endDate?: string }) => {
+    if (formatMode === 'html') {
+      const snippet = `
+<div class="entry-block">
+  <div class="row-header">
+    <span class="institution"><strong>${escapeHtml(edu.institution)}</strong></span>
+    <span class="dates">${escapeHtml([edu.startDate, edu.endDate].filter(Boolean).join(' – '))}</span>
+  </div>
+  <div class="row-sub">
+    <span class="degree"><em>${escapeHtml(edu.degree)}${edu.fieldOfStudy ? ` in ${escapeHtml(edu.fieldOfStudy)}` : ''}</em></span>
+  </div>
+</div>`.trim();
+      onInsert(snippet);
+    } else {
+      const snippet = `${edu.degree} in ${edu.fieldOfStudy || ''} – ${edu.institution} (${[edu.startDate, edu.endDate].filter(Boolean).join(' – ')})`;
+      onInsert(snippet);
+    }
+    onClose();
+  };
+
+  const handleInsertProfileField = (label: string, value: string) => {
+    onInsert(value);
+    onClose();
+  };
+
+  return (
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title="Insert from Career Vault"
+      description="Browse your stored achievements, experiences, and skills to insert into the editor at your cursor position."
+      maxWidth="max-w-3xl"
+    >
+      <div className="space-y-4">
+        
+        {/* Top Controls: Search + Format Selector */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          
+          {/* Search Bar */}
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-2.5 h-4 w-4 text-zinc-400" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              placeholder="Search achievements, companies, roles, skills..."
+              className="w-full rounded-xl border border-zinc-200 pl-9 pr-4 py-2 text-xs focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900"
+            />
+          </div>
+
+          {/* Format Toggle */}
+          <div className="flex items-center gap-1.5 self-end sm:self-auto">
+            <span className="text-[11px] font-medium text-zinc-500">Insert Format:</span>
+            <div className="flex items-center rounded-lg bg-zinc-100 p-0.5 border border-zinc-200">
+              <button
+                type="button"
+                onClick={() => setFormatMode('html')}
+                className={`flex items-center gap-1 rounded px-2.5 py-1 text-xs font-mono transition-all ${
+                  formatMode === 'html'
+                    ? 'bg-white text-zinc-900 font-semibold shadow-sm'
+                    : 'text-zinc-500 hover:text-zinc-900'
+                }`}
+              >
+                <Code className="h-3 w-3" />
+                <span>HTML Tag</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setFormatMode('raw')}
+                className={`flex items-center gap-1 rounded px-2.5 py-1 text-xs font-mono transition-all ${
+                  formatMode === 'raw'
+                    ? 'bg-white text-zinc-900 font-semibold shadow-sm'
+                    : 'text-zinc-500 hover:text-zinc-900'
+                }`}
+              >
+                <FileText className="h-3 w-3" />
+                <span>Raw Text</span>
+              </button>
+            </div>
+          </div>
+
+        </div>
+
+        {/* Category Tabs */}
+        <div className="flex items-center gap-1 overflow-x-auto border-b border-zinc-200 pb-2">
+          <button
+            onClick={() => setActiveTab('achievements')}
+            className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-all ${
+              activeTab === 'achievements'
+                ? 'bg-zinc-900 text-white shadow-sm'
+                : 'text-zinc-600 hover:bg-zinc-100'
+            }`}
+          >
+            <Tag className="h-3.5 w-3.5" />
+            <span>Achievements ({achievements?.length || 0})</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('experiences')}
+            className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-all ${
+              activeTab === 'experiences'
+                ? 'bg-zinc-900 text-white shadow-sm'
+                : 'text-zinc-600 hover:bg-zinc-100'
+            }`}
+          >
+            <Briefcase className="h-3.5 w-3.5" />
+            <span>Job Blocks ({experiences?.length || 0})</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('skills')}
+            className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-all ${
+              activeTab === 'skills'
+                ? 'bg-zinc-900 text-white shadow-sm'
+                : 'text-zinc-600 hover:bg-zinc-100'
+            }`}
+          >
+            <Wrench className="h-3.5 w-3.5" />
+            <span>Skills ({skills?.length || 0})</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('education')}
+            className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-all ${
+              activeTab === 'education'
+                ? 'bg-zinc-900 text-white shadow-sm'
+                : 'text-zinc-600 hover:bg-zinc-100'
+            }`}
+          >
+            <GraduationCap className="h-3.5 w-3.5" />
+            <span>Education ({educations?.length || 0})</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('profile')}
+            className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-all ${
+              activeTab === 'profile'
+                ? 'bg-zinc-900 text-white shadow-sm'
+                : 'text-zinc-600 hover:bg-zinc-100'
+            }`}
+          >
+            <User className="h-3.5 w-3.5" />
+            <span>Profile Data</span>
+          </button>
+        </div>
+
+        {/* Content Area */}
+        <div className="max-h-96 overflow-y-auto space-y-2 pr-1">
+          
+          {/* TAB 1: ACHIEVEMENTS */}
+          {activeTab === 'achievements' && (
+            filteredAchievements.length === 0 ? (
+              <p className="text-center text-xs text-zinc-400 py-8">No achievements match your search.</p>
+            ) : (
+              filteredAchievements.map(ach => {
+                const exp = expMap.get(ach.experienceId);
+                return (
+                  <div
+                    key={ach.id}
+                    className="group flex items-start justify-between gap-3 rounded-xl border border-zinc-200 bg-white p-3.5 hover:border-zinc-300 hover:bg-zinc-50 transition-all"
+                  >
+                    <div className="flex-1 space-y-1">
+                      {exp && (
+                        <div className="flex items-center gap-2 text-[11px] text-zinc-500 font-medium">
+                          <span>{exp.role} @ {exp.company}</span>
+                          {ach.category && (
+                            <span className="rounded bg-zinc-100 px-1.5 py-0.2 font-mono text-[10px] text-zinc-600 border border-zinc-200">
+                              {ach.category}
+                            </span>
+                          )}
+                        </div>
+                      )}
+                      <p className="text-xs text-zinc-800 leading-relaxed font-sans">{ach.originalText}</p>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => handleInsertAchievement(ach.originalText)}
+                      className="flex-shrink-0 flex items-center gap-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 px-2.5 py-1.5 text-xs font-medium text-white transition-colors"
+                    >
+                      <Plus className="h-3 w-3" />
+                      <span>Insert</span>
+                    </button>
+                  </div>
+                );
+              })
+            )
+          )}
+
+          {/* TAB 2: JOB BLOCKS */}
+          {activeTab === 'experiences' && (
+            filteredExperiences.length === 0 ? (
+              <p className="text-center text-xs text-zinc-400 py-8">No experiences recorded.</p>
+            ) : (
+              filteredExperiences.map(exp => {
+                const expAchs = achievements?.filter(a => a.experienceId === exp.id) || [];
+                return (
+                  <div
+                    key={exp.id}
+                    className="flex items-start justify-between gap-3 rounded-xl border border-zinc-200 bg-white p-4 hover:border-zinc-300 hover:bg-zinc-50 transition-all"
+                  >
+                    <div className="flex-1 space-y-1.5">
+                      <div className="flex items-center gap-2">
+                        <h4 className="font-bold text-xs text-zinc-900">{exp.role}</h4>
+                        <span className="text-xs text-zinc-500 font-medium">@ {exp.company}</span>
+                      </div>
+                      <p className="text-[11px] text-zinc-400">
+                        {exp.startDate} – {exp.endDate || (exp.isCurrent ? 'Present' : '')} {exp.location ? `· ${exp.location}` : ''}
+                      </p>
+                      <p className="text-xs text-zinc-600">
+                        {expAchs.length} bullet point{expAchs.length === 1 ? '' : 's'} included
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => handleInsertExperience(exp.id)}
+                      className="flex items-center gap-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 px-3 py-1.5 text-xs font-medium text-white transition-colors"
+                    >
+                      <Plus className="h-3 w-3" />
+                      <span>Insert Block</span>
+                    </button>
+                  </div>
+                );
+              })
+            )
+          )}
+
+          {/* TAB 3: SKILLS */}
+          {activeTab === 'skills' && (
+            filteredSkills.length === 0 ? (
+              <p className="text-center text-xs text-zinc-400 py-8">No skills found.</p>
+            ) : (
+              filteredSkills.map(s => (
+                <div
+                  key={s.id}
+                  className="flex items-center justify-between gap-3 rounded-xl border border-zinc-200 bg-white p-3 hover:border-zinc-300 hover:bg-zinc-50 transition-all"
+                >
+                  <div>
+                    <span className="text-[10px] font-mono uppercase font-semibold text-zinc-400">{s.category}</span>
+                    <p className="text-xs font-medium text-zinc-800">{s.name}</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleInsertSkill(s)}
+                    className="flex items-center gap-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 px-2.5 py-1.5 text-xs font-medium text-white transition-colors"
+                  >
+                    <Plus className="h-3 w-3" />
+                    <span>Insert</span>
+                  </button>
+                </div>
+              ))
+            )
+          )}
+
+          {/* TAB 4: EDUCATION */}
+          {activeTab === 'education' && (
+            filteredEducations.length === 0 ? (
+              <p className="text-center text-xs text-zinc-400 py-8">No education recorded.</p>
+            ) : (
+              filteredEducations.map(edu => (
+                <div
+                  key={edu.id}
+                  className="flex items-center justify-between gap-3 rounded-xl border border-zinc-200 bg-white p-3 hover:border-zinc-300 hover:bg-zinc-50 transition-all"
+                >
+                  <div>
+                    <h4 className="font-bold text-xs text-zinc-900">{edu.institution}</h4>
+                    <p className="text-xs text-zinc-600">{edu.degree}{edu.fieldOfStudy ? ` in ${edu.fieldOfStudy}` : ''}</p>
+                    <p className="text-[10px] text-zinc-400">{[edu.startDate, edu.endDate].filter(Boolean).join(' – ')}</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleInsertEducation(edu)}
+                    className="flex items-center gap-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 px-2.5 py-1.5 text-xs font-medium text-white transition-colors"
+                  >
+                    <Plus className="h-3 w-3" />
+                    <span>Insert</span>
+                  </button>
+                </div>
+              ))
+            )
+          )}
+
+          {/* TAB 5: PROFILE */}
+          {activeTab === 'profile' && (
+            !profile ? (
+              <p className="text-center text-xs text-zinc-400 py-8">No profile data saved.</p>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {[
+                  { label: 'Full Name', val: profile.fullName },
+                  { label: 'Headline', val: profile.headline },
+                  { label: 'Email', val: profile.email },
+                  { label: 'Phone', val: profile.phone },
+                  { label: 'Location', val: profile.location },
+                  { label: 'Website', val: profile.website },
+                  { label: 'LinkedIn', val: profile.linkedin },
+                  { label: 'GitHub', val: profile.github },
+                ].filter(item => Boolean(item.val)).map((item, idx) => (
+                  <div
+                    key={idx}
+                    className="flex items-center justify-between rounded-xl border border-zinc-200 bg-white p-2.5 hover:border-zinc-300 hover:bg-zinc-50 transition-all"
+                  >
+                    <div className="min-w-0 pr-2">
+                      <span className="text-[10px] text-zinc-400 uppercase font-semibold block">{item.label}</span>
+                      <p className="text-xs font-medium text-zinc-800 truncate">{item.val}</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleInsertProfileField(item.label, item.val || '')}
+                      className="flex-shrink-0 flex items-center gap-1 rounded-md bg-zinc-900 hover:bg-zinc-800 px-2 py-1 text-xs font-medium text-white"
+                    >
+                      <Plus className="h-3 w-3" />
+                      <span>Insert</span>
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )
+          )}
+
+        </div>
+
+      </div>
+    </Modal>
+  );
+};
+
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}

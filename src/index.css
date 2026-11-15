@@ -1,0 +1,91 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html, body {
+    height: 100%;
+  }
+
+  /* Custom subtle scrollbars */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #d4d4d8;
+    border-radius: 9999px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #a1a1aa;
+  }
+}
+
+/* CodeMirror Scroller Height Fix */
+.cm-editor {
+  height: 100% !important;
+}
+.cm-editor .cm-scroller {
+  overflow: auto !important;
+  height: 100% !important;
+}
+
+/* Screen Preview Container */
+.resume-sheet {
+  width: 210mm;
+  min-height: 297mm;
+  background: white;
+  margin: 0 auto;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.08), 0 8px 10px -6px rgba(0, 0, 0, 0.04);
+  box-sizing: border-box;
+}
+
+/* Print & PDF Export Rules */
+@media print {
+  @page {
+    size: A4;
+    margin: 0; /* Zero page margin strips browser header/footer timestamps, titles & URLs */
+  }
+  
+  html, body, #root {
+    background: white !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+    height: auto !important;
+    overflow: visible !important;
+  }
+
+  .no-print {
+    display: none !important; /* Hides everything marked no-print */
+  }
+
+  .print-only-container {
+    display: block !important;
+    position: static !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+    background: white !important;
+  }
+
+  .print-only-container .resume-sheet {
+    box-shadow: none !important;
+    margin: 0 auto !important;
+    width: 210mm !important;
+    min-height: 297mm !important;
+    box-sizing: border-box !important;
+    padding: 15mm 18mm !important; /* Document margins are cleanly inside the sheet */
+    page-break-after: avoid;
+  }
+
+  .experience-block,
+  .entry-block,
+  .minimal-entry {
+    break-inside: avoid !important; /* Prevents awkward page breaks */
+    page-break-inside: avoid !important;
+  }
+}
