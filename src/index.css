@@ -36,7 +36,8 @@
 /* Screen Preview Container */
 .resume-sheet {
   width: 210mm;
-  min-height: 297mm;
+  min-height: calc(var(--page-count, 1) * 297mm);
+  position: relative;
   background: white;
   margin: 0 auto;
   box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.08), 0 8px 10px -6px rgba(0, 0, 0, 0.04);
