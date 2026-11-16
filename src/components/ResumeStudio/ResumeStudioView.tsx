@@ -87,10 +87,18 @@ export const ResumeStudioView: React.FC<ResumeStudioViewProps> = ({
     const computed = window.getComputedStyle(sheetEl);
     const paddingTop = parseFloat(computed.paddingTop) || 53;
     const paddingBottom = parseFloat(computed.paddingBottom) || 53;
-    const usableHeight = pageHeightPx - paddingTop - paddingBottom;
+    // Provide a comfortable 24px safety buffer so elements never overflow the 297mm sheet
+    const usableHeight = pageHeightPx - paddingTop - paddingBottom - 24;
 
     const wrapperClass = sheetEl.className || 'resume-sheet minimal-template';
     const children = Array.from(sheetEl.children) as HTMLElement[];
+
+    const getOuterHeight = (el: HTMLElement): number => {
+      const st = window.getComputedStyle(el);
+      const mt = parseFloat(st.marginTop) || 0;
+      const mb = parseFloat(st.marginBottom) || 0;
+      return el.offsetHeight + mt + mb;
+    };
 
     const pages: string[] = [];
     let currentPageElements: string[] = [];
@@ -110,7 +118,7 @@ export const ResumeStudioView: React.FC<ResumeStudioViewProps> = ({
                         child.classList.contains('section');
 
       if (!isSection) {
-        const h = child.offsetHeight;
+        const h = getOuterHeight(child);
         if (currentPageHeight + h > usableHeight && currentPageElements.length > 0) {
           commitPage();
         }
@@ -124,10 +132,11 @@ export const ResumeStudioView: React.FC<ResumeStudioViewProps> = ({
       if (entries.length === 0) {
         entries = Array.from(child.children).filter(c => c !== heading) as HTMLElement[];
       }
-      const headingHeight = heading ? heading.offsetHeight : 28;
+      const headingHeight = heading ? getOuterHeight(heading) : 34;
+      const sectionMarginBottom = parseFloat(window.getComputedStyle(child).marginBottom) || 12;
 
       if (entries.length === 0) {
-        const h = child.offsetHeight;
+        const h = getOuterHeight(child);
         if (currentPageHeight + h > usableHeight && currentPageElements.length > 0) {
           commitPage();
         }
@@ -136,7 +145,7 @@ export const ResumeStudioView: React.FC<ResumeStudioViewProps> = ({
         continue;
       }
 
-      const firstEntryHeight = entries[0]?.offsetHeight || 40;
+      const firstEntryHeight = entries[0] ? getOuterHeight(entries[0]) : 40;
       if (currentPageHeight + headingHeight + firstEntryHeight > usableHeight && currentPageElements.length > 0) {
         commitPage();
       }
@@ -150,7 +159,7 @@ export const ResumeStudioView: React.FC<ResumeStudioViewProps> = ({
 
       for (let i = 0; i < entries.length; i++) {
         const entry = entries[i];
-        const entryHeight = entry.offsetHeight;
+        const entryHeight = getOuterHeight(entry);
 
         if (currentPageHeight + entryHeight > usableHeight && (currentSectionEntries.length > 0 || currentPageElements.length > 0)) {
           if (currentSectionEntries.length > 0) {
@@ -172,6 +181,7 @@ export const ResumeStudioView: React.FC<ResumeStudioViewProps> = ({
       if (currentSectionEntries.length > 0) {
         const hHtml = isFirstChunkForSection ? headingHtml : '';
         currentPageElements.push(`<section class="${sectionClass}">${hHtml}${currentSectionEntries.join('')}</section>`);
+        currentPageHeight += sectionMarginBottom;
       }
     }
 
@@ -766,17 +776,14 @@ export const ResumeStudioView: React.FC<ResumeStudioViewProps> = ({
 
       </div>
 
-      {/* DIRECT-CHILD PRINT PORTAL FOR CHROME PDF EXPORT (Zero parent overflow clipping) */}
+      {/* DIRECT-CHILD PRINT PORTAL FOR CHROME PDF EXPORT */}
       {typeof document !== 'undefined' && createPortal(
         <div className="print-portal-container" aria-hidden="true">
           <style dangerouslySetInnerHTML={{ __html: liveCss }} />
-          {(pageHtmls.length > 0 ? pageHtmls : [liveHtml]).map((pHtml, pIdx) => (
-            <div 
-              key={`print-page-${pIdx}`}
-              className="print-page-sheet"
-              dangerouslySetInnerHTML={{ __html: pHtml }}
-            />
-          ))}
+          <div 
+            className="print-resume-content"
+            dangerouslySetInnerHTML={{ __html: liveHtml }}
+          />
         </div>,
         document.body
       )}

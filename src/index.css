@@ -52,7 +52,7 @@
 @media print {
   @page {
     size: A4 portrait;
-    margin: 0; /* Zero page margin strips browser header/footer timestamps, titles & URLs */
+    margin: 14mm 16mm; /* Exact standard A4 margins on every printed page */
   }
   
   html, body {
@@ -66,12 +66,8 @@
   }
 
   /* Completely hide the interactive React app */
-  #root {
+  #root, .no-print {
     display: none !important;
-  }
-
-  .no-print {
-    display: none !important; /* Hides everything marked no-print */
   }
 
   /* Direct-child print portal container */
@@ -87,32 +83,15 @@
     overflow: visible !important;
   }
 
-  .print-page-sheet {
-    box-shadow: none !important;
-    margin: 0 auto !important;
-    width: 210mm !important;
-    min-height: 297mm !important;
-    height: auto !important;
-    box-sizing: border-box !important;
-    padding: 0 !important;
-    overflow: visible !important;
-    page-break-after: always !important;
-    break-after: page !important;
-  }
-
-  .print-page-sheet:last-child {
-    page-break-after: auto !important;
-    break-after: auto !important;
-  }
-
+  .print-portal-container .print-resume-content,
   .print-portal-container .resume-sheet {
     box-shadow: none !important;
-    margin: 0 auto !important;
-    width: 210mm !important;
-    min-height: 297mm !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-height: 0 !important;
     height: auto !important;
-    box-sizing: border-box !important;
-    padding: 14mm 16mm !important;
     overflow: visible !important;
   }
 
