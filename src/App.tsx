@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { db, getCompleteResumeData, loadSampleData } from './db';
+import { db, getCompleteResumeData, loadSampleData, sanitizeCustomSectionItems } from './db';
 import { ResumeData, TailoredResume } from './types';
 import { Header } from './components/Header';
 import { VaultManager } from './components/CareerVault/VaultManager';
@@ -31,6 +31,7 @@ export const App: React.FC = () => {
   // On first load, check if DB is empty; if empty, preload sample data for instant exploration
   useEffect(() => {
     async function initVault() {
+      await sanitizeCustomSectionItems();
       const count = await db.experiences.count();
       if (count === 0) {
         await loadSampleData();

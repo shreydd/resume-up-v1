@@ -99,13 +99,26 @@ export function generateMinimalHTML(data: ResumeData): string {
           ? item.bullets 
           : (typeof item.bullets === 'string' ? [item.bullets] : []);
         
-        const validBullets = rawBullets.map(b => {
+        let validBullets = rawBullets.map(b => {
           if (typeof b === 'string') return b.trim();
           if (typeof b === 'object' && b !== null) {
             return ((b as any).text || (b as any).originalText || (b as any).bullet || '').trim();
           }
           return String(b || '').trim();
         }).filter(b => b.length > 0);
+
+        let descText = '';
+        const rawDesc = item.description as any;
+        if (typeof rawDesc === 'string') {
+          descText = rawDesc.trim();
+        } else if (Array.isArray(rawDesc)) {
+          const extra = rawDesc.map((d: any) => String(d || '').trim()).filter(Boolean);
+          if (validBullets.length === 0) {
+            validBullets = extra;
+          } else {
+            validBullets = [...validBullets, ...extra];
+          }
+        }
 
         const rawUrl = item.url ? item.url.trim() : '';
         const href = rawUrl ? (rawUrl.startsWith('http://') || rawUrl.startsWith('https://') || rawUrl.startsWith('mailto:') ? rawUrl : 'https://' + rawUrl) : '';
@@ -125,7 +138,7 @@ export function generateMinimalHTML(data: ResumeData): string {
               <span class="secondary-text"><em>${escapeHtml(item.subtitle)}</em></span>
             </div>
           ` : ''}
-          ${item.description ? `<p class="entry-desc">${escapeHtml(item.description)}</p>` : ''}
+          ${descText ? `<p class="entry-desc">${escapeHtml(descText)}</p>` : ''}
           ${validBullets.length > 0 ? `
             <ul class="minimal-bullets">
               ${validBullets.map(b => `<li>${escapeHtml(b)}</li>`).join('')}

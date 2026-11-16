@@ -330,13 +330,22 @@ export function extractCustomItemFields(raw: any) {
 export function normalizeBullets(raw: any): string[] {
   if (!raw) return [];
   if (Array.isArray(raw)) {
-    return raw.map(b => {
-      if (typeof b === 'string') return b.trim();
-      if (typeof b === 'object' && b !== null) {
-        return (b.text || b.originalText || b.bullet || b.content || '').trim();
+    const list: string[] = [];
+    for (const b of raw) {
+      if (typeof b === 'string') {
+        const trimmed = b.trim();
+        if (trimmed) list.push(trimmed);
+      } else if (Array.isArray(b)) {
+        list.push(...normalizeBullets(b));
+      } else if (typeof b === 'object' && b !== null) {
+        const text = (b.text || b.originalText || b.bullet || b.content || b.title || '').trim();
+        if (text) list.push(text);
+      } else if (b !== undefined && b !== null) {
+        const str = String(b).trim();
+        if (str) list.push(str);
       }
-      return String(b || '').trim();
-    }).filter(b => b.length > 0);
+    }
+    return list;
   }
   if (typeof raw === 'string') {
     return raw.split('\n').map(s => s.trim().replace(/^[•\-\*]\s*/, '')).filter(b => b.length > 0);
@@ -344,7 +353,54 @@ export function normalizeBullets(raw: any): string[] {
   return [];
 }
 
+// Auto-heal custom section items if description is an array or bullets are malformed
+export async function sanitizeCustomSectionItems(): Promise<void> {
+  try {
+    if (!db.customSectionItems) return;
+    const items = await db.customSectionItems.toArray();
+    for (const item of items) {
+      let needsUpdate = false;
+      let newDescription = item.description;
+      let newBullets = Array.isArray(item.bullets) ? [...item.bullets] : [];
+
+      if (Array.isArray(item.description)) {
+        const descArray = (item.description as any[]).map(d => String(d || '').trim()).filter(Boolean);
+        if (newBullets.length === 0) {
+          newBullets = descArray;
+        } else {
+          newBullets = [...newBullets, ...descArray];
+        }
+        newDescription = undefined;
+        needsUpdate = true;
+      } else if (typeof item.description === 'string') {
+        newDescription = item.description.trim() || undefined;
+      } else if (item.description !== undefined && item.description !== null) {
+        newDescription = String(item.description).trim() || undefined;
+        needsUpdate = true;
+      }
+
+      const cleanBullets = normalizeBullets(newBullets);
+      if (cleanBullets.length !== (item.bullets?.length || 0)) {
+        newBullets = cleanBullets;
+        needsUpdate = true;
+      }
+
+      if (needsUpdate) {
+        await db.customSectionItems.update(item.id, {
+          description: newDescription,
+          bullets: newBullets
+        });
+      }
+    }
+  } catch (err) {
+    console.warn('Failed to sanitize custom section items:', err);
+  }
+}
+
 export async function getCompleteResumeData(): Promise<ResumeData> {
+  // Run silent self-healing on custom section items
+  await sanitizeCustomSectionItems();
+
   const profileList = await db.profile.toArray();
   const profile = profileList[0] || {
     id: 1,
@@ -370,11 +426,25 @@ export async function getCompleteResumeData(): Promise<ResumeData> {
     section: sec,
     items: customItems
       .filter(item => item.sectionId === sec.id)
-      .map(item => ({
-        ...item,
-        title: item.title || '',
-        bullets: normalizeBullets(item.bullets)
-      }))
+      .map(item => {
+        let desc = typeof item.description === 'string' ? item.description.trim() : '';
+        let bullets = normalizeBullets(item.bullets);
+        if (Array.isArray(item.description)) {
+          const extra = normalizeBullets(item.description);
+          if (bullets.length === 0) {
+            bullets = extra;
+          } else {
+            bullets = [...bullets, ...extra];
+          }
+          desc = '';
+        }
+        return {
+          ...item,
+          title: item.title || '',
+          description: desc || undefined,
+          bullets
+        };
+      })
   }));
 
   return {

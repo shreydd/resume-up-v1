@@ -523,6 +523,12 @@ export const VaultManager: React.FC = () => {
   const openEditItem = (item: CustomSectionItem) => {
     setTargetSectionId(item.sectionId);
     setEditingItem(item);
+    const desc = typeof item.description === 'string'
+      ? item.description
+      : (Array.isArray(item.description) ? (item.description as string[]).join('\n') : '');
+    const bullets = Array.isArray(item.bullets) && item.bullets.length > 0
+      ? [...item.bullets]
+      : (Array.isArray(item.description) ? [...(item.description as string[])] : ['']);
     setItemFormData({
       title: item.title,
       subtitle: item.subtitle || '',
@@ -530,8 +536,8 @@ export const VaultManager: React.FC = () => {
       endDate: item.endDate || '',
       location: item.location || '',
       url: item.url || '',
-      description: item.description || '',
-      bullets: item.bullets && item.bullets.length > 0 ? [...item.bullets] : ['']
+      description: desc,
+      bullets: bullets.map(b => typeof b === 'string' ? b : String(b || ''))
     });
     setIsItemModalOpen(true);
   };
@@ -1400,8 +1406,8 @@ export const VaultManager: React.FC = () => {
                                   </div>
                                 </div>
 
-                                {item.description && (
-                                  <p className="text-xs text-zinc-600 pt-1 leading-relaxed">{item.description}</p>
+                                {typeof item.description === 'string' && item.description.trim() && (
+                                  <p className="text-xs text-zinc-600 pt-1 leading-relaxed">{item.description.trim()}</p>
                                 )}
 
                                 {item.bullets && item.bullets.length > 0 && (

@@ -26,6 +26,40 @@ interface InsertVaultDataModalProps {
 
 type TabType = 'achievements' | 'experiences' | 'custom' | 'skills' | 'education' | 'profile';
 
+function safeString(val: any): string {
+  if (val === null || val === undefined) return '';
+  if (typeof val === 'string') return val;
+  if (Array.isArray(val)) return val.map(safeString).filter(Boolean).join(' ');
+  if (typeof val === 'object') return val.text || val.originalText || val.bullet || val.title || val.name || '';
+  return String(val);
+}
+
+function safeBullets(val: any): string[] {
+  if (!val) return [];
+  if (Array.isArray(val)) {
+    const list: string[] = [];
+    for (const item of val) {
+      if (typeof item === 'string') {
+        const trimmed = item.trim();
+        if (trimmed) list.push(trimmed);
+      } else if (Array.isArray(item)) {
+        list.push(...safeBullets(item));
+      } else if (typeof item === 'object' && item !== null) {
+        const text = safeString(item).trim();
+        if (text) list.push(text);
+      } else if (item !== undefined && item !== null) {
+        const str = String(item).trim();
+        if (str) list.push(str);
+      }
+    }
+    return list;
+  }
+  if (typeof val === 'string') {
+    return val.split('\n').map(s => s.trim().replace(/^[•\-\*]\s*/, '')).filter(Boolean);
+  }
+  return [];
+}
+
 export const InsertVaultDataModal: React.FC<InsertVaultDataModalProps> = ({
   isOpen,
   onClose,
@@ -95,29 +129,43 @@ export const InsertVaultDataModal: React.FC<InsertVaultDataModalProps> = ({
         const sec = sectionMap.get(it.sectionId);
         const secName = sec?.title || 'Custom';
         
-        if (it.description && it.description.trim()) {
-          list.push({
-            id: `custom-desc-${it.id}`,
-            text: it.description.trim(),
-            sourceRole: it.subtitle,
-            sourceEntity: it.title,
-            category: secName
-          });
-        }
-
-        if (it.bullets && it.bullets.length > 0) {
-          it.bullets.forEach((b, bIdx) => {
-            if (b.trim()) {
+        // Handle description safely whether it is a string or an array
+        if (Array.isArray(it.description)) {
+          it.description.forEach((d, dIdx) => {
+            const descText = safeString(d).trim();
+            if (descText) {
               list.push({
-                id: `custom-b-${it.id}-${bIdx}`,
-                text: b.trim(),
-                sourceRole: it.subtitle,
-                sourceEntity: it.title,
+                id: `custom-desc-${it.id}-${dIdx}`,
+                text: descText,
+                sourceRole: safeString(it.subtitle),
+                sourceEntity: safeString(it.title),
                 category: secName
               });
             }
           });
+        } else if (it.description) {
+          const descText = safeString(it.description).trim();
+          if (descText) {
+            list.push({
+              id: `custom-desc-${it.id}`,
+              text: descText,
+              sourceRole: safeString(it.subtitle),
+              sourceEntity: safeString(it.title),
+              category: secName
+            });
+          }
         }
+
+        const bullets = safeBullets(it.bullets);
+        bullets.forEach((b, bIdx) => {
+          list.push({
+            id: `custom-b-${it.id}-${bIdx}`,
+            text: b,
+            sourceRole: safeString(it.subtitle),
+            sourceEntity: safeString(it.title),
+            category: secName
+          });
+        });
       }
     }
 
@@ -168,22 +216,43 @@ export const InsertVaultDataModal: React.FC<InsertVaultDataModalProps> = ({
     if (!customItems) return [];
     return customItems.filter(it => {
       const sec = sectionMap.get(it.sectionId);
-      const matchSearch = searchQuery === '' ||
-        it.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (it.subtitle && it.subtitle.toLowerCase().includes(searchQuery.toLowerCase())) ||
-        (it.description && it.description.toLowerCase().includes(searchQuery.toLowerCase())) ||
-        (sec && sec.title.toLowerCase().includes(searchQuery.toLowerCase())) ||
-        (it.bullets && it.bullets.some(b => b.toLowerCase().includes(searchQuery.toLowerCase())));
-      return matchSearch;
+      const titleStr = safeString(it.title).toLowerCase();
+      const subtitleStr = safeString(it.subtitle).toLowerCase();
+      const descStr = safeString(it.description).toLowerCase();
+      const secStr = safeString(sec?.title).toLowerCase();
+      const bullets = safeBullets(it.bullets);
+
+      const q = searchQuery.toLowerCase();
+      return q === '' ||
+        titleStr.includes(q) ||
+        subtitleStr.includes(q) ||
+        descStr.includes(q) ||
+        secStr.includes(q) ||
+        bullets.some(b => b.toLowerCase().includes(q));
     });
   }, [customItems, sectionMap, searchQuery]);
 
   const handleInsertCustomItem = (item: CustomSectionItem) => {
+    const title = safeString(item.title);
+    const subtitle = safeString(item.subtitle);
+    const rawUrl = safeString(item.url).trim();
+    const dates = [safeString(item.startDate), safeString(item.endDate)].filter(Boolean).join(' – ');
+    let descText = typeof item.description === 'string' ? item.description.trim() : '';
+    let bullets = safeBullets(item.bullets);
+
+    if (Array.isArray(item.description)) {
+      const extra = safeBullets(item.description);
+      if (bullets.length === 0) {
+        bullets = extra;
+      } else {
+        bullets = [...bullets, ...extra];
+      }
+    }
+
     if (formatMode === 'html') {
-      const dates = [item.startDate, item.endDate].filter(Boolean).join(' – ');
-      const titleLink = item.url
-        ? `<a href="${item.url}" target="_blank"><strong>${escapeHtml(item.title)}</strong></a>`
-        : `<strong>${escapeHtml(item.title)}</strong>`;
+      const titleLink = rawUrl
+        ? `<a href="${rawUrl}" target="_blank"><strong>${escapeHtml(title)}</strong></a>`
+        : `<strong>${escapeHtml(title)}</strong>`;
 
       const snippet = `
 <div class="entry-block custom-block">
@@ -191,19 +260,18 @@ export const InsertVaultDataModal: React.FC<InsertVaultDataModalProps> = ({
     <span class="title">${titleLink}</span>
     <span class="dates"><em>${escapeHtml(dates)}</em></span>
   </div>
-  ${item.subtitle ? `<div class="row-sub"><span class="subtitle"><em>${escapeHtml(item.subtitle)}</em></span></div>` : ''}
-  ${item.description ? `<p class="entry-desc">${escapeHtml(item.description)}</p>` : ''}
-  ${item.bullets && item.bullets.length > 0 ? `<ul class="bullet-list">
-    ${item.bullets.map(b => `<li>${escapeHtml(b)}</li>`).join('\n    ')}
+  ${subtitle ? `<div class="row-sub"><span class="subtitle"><em>${escapeHtml(subtitle)}</em></span></div>` : ''}
+  ${descText ? `<p class="entry-desc">${escapeHtml(descText)}</p>` : ''}
+  ${bullets.length > 0 ? `<ul class="bullet-list">
+    ${bullets.map(b => `<li>${escapeHtml(b)}</li>`).join('\n    ')}
   </ul>` : ''}
 </div>`.trim();
       onInsert(snippet);
     } else {
-      const dates = [item.startDate, item.endDate].filter(Boolean).join(' – ');
-      const bulletText = item.bullets && item.bullets.length > 0
-        ? '\n' + item.bullets.map(b => `• ${b}`).join('\n')
+      const bulletText = bullets.length > 0
+        ? '\n' + bullets.map(b => `• ${b}`).join('\n')
         : '';
-      const snippet = `${item.title}${item.subtitle ? ` (${item.subtitle})` : ''}${dates ? ` [${dates}]` : ''}${item.url ? ` - ${item.url}` : ''}${bulletText}`;
+      const snippet = `${title}${subtitle ? ` (${subtitle})` : ''}${dates ? ` [${dates}]` : ''}${rawUrl ? ` - ${rawUrl}` : ''}${descText ? `\n${descText}` : ''}${bulletText}`;
       onInsert(snippet);
     }
     onClose();
@@ -500,7 +568,18 @@ export const InsertVaultDataModal: React.FC<InsertVaultDataModalProps> = ({
             ) : (
               filteredCustomItems.map(item => {
                 const sec = sectionMap.get(item.sectionId);
-                const dates = [item.startDate, item.endDate].filter(Boolean).join(' – ');
+                const dates = [safeString(item.startDate), safeString(item.endDate)].filter(Boolean).join(' – ');
+                const itemBullets = safeBullets(item.bullets);
+                let itemDesc = typeof item.description === 'string' ? item.description.trim() : '';
+                if (Array.isArray(item.description)) {
+                  const extra = safeBullets(item.description);
+                  if (itemBullets.length === 0) {
+                    itemBullets.push(...extra);
+                  } else {
+                    itemDesc = extra.join('; ');
+                  }
+                }
+
                 return (
                   <div
                     key={item.id}
@@ -514,16 +593,16 @@ export const InsertVaultDataModal: React.FC<InsertVaultDataModalProps> = ({
                               {sec.title}
                             </span>
                           )}
-                          <h4 className="font-semibold text-xs text-zinc-900">{item.title}</h4>
+                          <h4 className="font-semibold text-xs text-zinc-900">{safeString(item.title)}</h4>
                         </div>
                         {item.subtitle && (
-                          <p className="text-xs text-zinc-600 font-medium">{item.subtitle}</p>
+                          <p className="text-xs text-zinc-600 font-medium">{safeString(item.subtitle)}</p>
                         )}
                         <div className="flex items-center gap-3 text-[11px] text-zinc-400">
                           {dates && <span>{dates}</span>}
-                          {item.location && <span>{item.location}</span>}
+                          {item.location && <span>{safeString(item.location)}</span>}
                           {item.url && (
-                            <span className="text-indigo-600 truncate max-w-xs">{item.url}</span>
+                            <span className="text-indigo-600 truncate max-w-xs">{safeString(item.url)}</span>
                           )}
                         </div>
                       </div>
@@ -542,12 +621,12 @@ export const InsertVaultDataModal: React.FC<InsertVaultDataModalProps> = ({
                     </div>
 
                     {/* Individual Description & Bullet Point Insertions */}
-                    {item.description && (
+                    {itemDesc && (
                       <div className="flex items-start justify-between gap-2 rounded-lg bg-zinc-50 border border-zinc-200/70 p-2 text-xs text-zinc-700">
-                        <span className="flex-1 leading-relaxed font-sans">{item.description}</span>
+                        <span className="flex-1 leading-relaxed font-sans">{itemDesc}</span>
                         <button
                           type="button"
-                          onClick={() => handleInsertAchievement(item.description!)}
+                          onClick={() => handleInsertAchievement(itemDesc)}
                           className="flex items-center gap-0.5 rounded bg-white hover:bg-zinc-100 px-2 py-1 text-[11px] font-medium text-zinc-700 border border-zinc-200 flex-shrink-0 transition-colors"
                           title="Insert this description as a bullet/snippet"
                         >
@@ -557,10 +636,10 @@ export const InsertVaultDataModal: React.FC<InsertVaultDataModalProps> = ({
                       </div>
                     )}
 
-                    {item.bullets && item.bullets.length > 0 && (
+                    {itemBullets.length > 0 && (
                       <div className="space-y-1.5 pt-0.5">
-                        <div className="text-[11px] font-medium text-zinc-500">Bullet points ({item.bullets.length}):</div>
-                        {item.bullets.map((b, bIdx) => (
+                        <div className="text-[11px] font-medium text-zinc-500">Bullet points ({itemBullets.length}):</div>
+                        {itemBullets.map((b, bIdx) => (
                           <div
                             key={bIdx}
                             className="flex items-start justify-between gap-2 rounded-lg bg-zinc-50 border border-zinc-200/70 p-2 text-xs text-zinc-700"
