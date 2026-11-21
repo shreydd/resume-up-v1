@@ -1,3 +1,6 @@
+export * from './settings';
+export * from './openrouter';
+
 export interface Profile {
   id?: number; // Primary key (singleton = 1)
   fullName: string;
@@ -19,6 +22,7 @@ export interface Experience {
   startDate: string;
   endDate?: string;
   isCurrent: boolean;
+  industry?: string; // Industry/Domain context (e.g. "Consumer Sports Tech / B2C Mobile") for high-fidelity privacy masking
 }
 
 export interface Achievement {

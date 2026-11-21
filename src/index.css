@@ -48,11 +48,17 @@
   display: none;
 }
 
+/* Top-level page configuration to suppress default browser print headers & footers */
+@page {
+  size: A4 portrait;
+  margin: 0; /* CRITICAL: 0 margin completely strips browser header (date, title) & footer (URL, page numbers) */
+}
+
 /* Print & PDF Export Rules */
 @media print {
   @page {
     size: A4 portrait;
-    margin: 14mm 16mm; /* Exact standard A4 margins on every printed page */
+    margin: 0; /* CRITICAL: 0 margin completely strips browser header (date, title) & footer (URL, page numbers) */
   }
   
   html, body {
@@ -63,6 +69,8 @@
     height: auto !important;
     min-height: 0 !important;
     overflow: visible !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
   }
 
   /* Completely hide the interactive React app */
@@ -83,16 +91,29 @@
     overflow: visible !important;
   }
 
-  .print-portal-container .print-resume-content,
-  .print-portal-container .resume-sheet {
-    box-shadow: none !important;
+  .print-portal-container .print-resume-content {
     margin: 0 !important;
     padding: 0 !important;
     width: 100% !important;
-    max-width: 100% !important;
-    min-height: 0 !important;
-    height: auto !important;
+  }
+
+  .print-portal-container .resume-sheet {
+    box-shadow: none !important;
+    margin: 0 auto !important;
+    width: 210mm !important;
+    min-height: 297mm !important;
+    box-sizing: border-box !important;
+    page-break-after: always !important;
+    break-after: page !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
     overflow: visible !important;
+    background: white !important;
+  }
+
+  .print-portal-container .resume-sheet:last-child {
+    page-break-after: auto !important;
+    break-after: auto !important;
   }
 
   .minimal-heading,

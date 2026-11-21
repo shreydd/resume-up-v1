@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../../db';
 import { TailoredResume } from '../../types';
@@ -36,9 +37,18 @@ export const SavedResumesView: React.FC<SavedResumesViewProps> = ({
 
   const handlePrint = (resume: TailoredResume) => {
     setActivePrintResume(resume);
+    const originalTitle = document.title;
+    const nameSlug = resume.title.trim().replace(/\s+/g, '_') || 'Resume';
+    document.title = nameSlug;
+
     setTimeout(() => {
       window.print();
-    }, 100);
+      const restoreTitle = () => {
+        document.title = originalTitle;
+        window.removeEventListener('afterprint', restoreTitle);
+      };
+      window.addEventListener('afterprint', restoreTitle);
+    }, 150);
   };
 
   return (
@@ -141,12 +151,16 @@ export const SavedResumesView: React.FC<SavedResumesViewProps> = ({
         </div>
       )}
 
-      {/* HIDDEN PRINT-ONLY CONTAINER */}
-      {activePrintResume && (
-        <div className="print-only-container hidden print:block">
+      {/* DIRECT-CHILD PRINT PORTAL FOR CHROME PDF EXPORT */}
+      {activePrintResume && typeof document !== 'undefined' && createPortal(
+        <div className="print-portal-container" aria-hidden="true">
           <style dangerouslySetInnerHTML={{ __html: activePrintResume.rawCss }} />
-          <div dangerouslySetInnerHTML={{ __html: activePrintResume.rawHtml }} />
-        </div>
+          <div 
+            className="print-resume-content"
+            dangerouslySetInnerHTML={{ __html: activePrintResume.rawHtml }} 
+          />
+        </div>,
+        document.body
       )}
 
     </div>

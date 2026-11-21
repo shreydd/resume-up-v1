@@ -102,7 +102,8 @@ export const VaultManager: React.FC = () => {
     location: '',
     startDate: '',
     endDate: '',
-    isCurrent: false
+    isCurrent: false,
+    industry: ''
   });
 
   const [isAchModalOpen, setIsAchModalOpen] = useState(false);
@@ -219,7 +220,8 @@ export const VaultManager: React.FC = () => {
       location: '',
       startDate: '',
       endDate: '',
-      isCurrent: false
+      isCurrent: false,
+      industry: ''
     });
     setIsExpModalOpen(true);
   };
@@ -232,7 +234,8 @@ export const VaultManager: React.FC = () => {
       location: exp.location || '',
       startDate: exp.startDate,
       endDate: exp.endDate || '',
-      isCurrent: exp.isCurrent
+      isCurrent: exp.isCurrent,
+      industry: exp.industry || ''
     });
     setIsExpModalOpen(true);
   };
@@ -248,7 +251,8 @@ export const VaultManager: React.FC = () => {
         location: expFormData.location.trim(),
         startDate: expFormData.startDate.trim(),
         endDate: expFormData.isCurrent ? 'Present' : expFormData.endDate.trim(),
-        isCurrent: expFormData.isCurrent
+        isCurrent: expFormData.isCurrent,
+        industry: expFormData.industry.trim()
       });
       showToast('Experience updated');
     } else {
@@ -260,7 +264,8 @@ export const VaultManager: React.FC = () => {
         location: expFormData.location.trim(),
         startDate: expFormData.startDate.trim(),
         endDate: expFormData.isCurrent ? 'Present' : expFormData.endDate.trim(),
-        isCurrent: expFormData.isCurrent
+        isCurrent: expFormData.isCurrent,
+        industry: expFormData.industry.trim()
       });
       showToast('Experience added');
     }
@@ -869,9 +874,14 @@ export const VaultManager: React.FC = () => {
                         {/* Header of Experience */}
                         <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 border-b border-zinc-100 pb-4">
                           <div>
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 flex-wrap">
                               <h3 className="text-base font-bold text-zinc-900">{exp.role}</h3>
                               <span className="text-sm font-semibold text-zinc-500">@ {exp.company}</span>
+                              {exp.industry && (
+                                <span className="rounded-md bg-purple-50 px-2 py-0.5 text-[10px] font-medium text-purple-700 border border-purple-200">
+                                  {exp.industry}
+                                </span>
+                              )}
                               {exp.isCurrent && (
                                 <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-700 border border-emerald-200">
                                   Current
@@ -1463,6 +1473,23 @@ export const VaultManager: React.FC = () => {
               placeholder="e.g. Senior Software Engineer"
               className="w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm focus:border-zinc-900 focus:outline-none"
             />
+          </div>
+
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-xs font-semibold text-zinc-700">Industry / Domain Context</label>
+              <span className="text-[10px] text-zinc-400 font-normal">Optional · For AI privacy masking</span>
+            </div>
+            <input
+              type="text"
+              value={expFormData.industry}
+              onChange={e => setExpFormData({ ...expFormData, industry: e.target.value })}
+              placeholder="e.g. Consumer Sports Tech, Fintech Payments, B2B SaaS"
+              className="w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm focus:border-zinc-900 focus:outline-none"
+            />
+            <p className="mt-1 text-[11px] text-zinc-500">
+              When tailoring with AI, company names are masked, but this industry context allows the model to align technical domain causality accurately.
+            </p>
           </div>
 
           <div>

@@ -399,7 +399,19 @@ export const ResumeStudioView: React.FC<ResumeStudioViewProps> = ({
   };
 
   const handlePrint = () => {
+    const originalTitle = document.title;
+    const nameSlug = initialResumeData?.profile?.fullName
+      ? initialResumeData.profile.fullName.trim().replace(/\s+/g, '_') + '_Resume'
+      : (resumeTitle.trim().replace(/\s+/g, '_') || 'Resume');
+    document.title = nameSlug;
+
     window.print();
+
+    const restoreTitle = () => {
+      document.title = originalTitle;
+      window.removeEventListener('afterprint', restoreTitle);
+    };
+    window.addEventListener('afterprint', restoreTitle);
   };
 
   return (
@@ -782,7 +794,9 @@ export const ResumeStudioView: React.FC<ResumeStudioViewProps> = ({
           <style dangerouslySetInnerHTML={{ __html: liveCss }} />
           <div 
             className="print-resume-content"
-            dangerouslySetInnerHTML={{ __html: liveHtml }}
+            dangerouslySetInnerHTML={{ 
+              __html: pageHtmls.length > 0 ? pageHtmls.join('') : liveHtml 
+            }}
           />
         </div>,
         document.body

@@ -10,7 +10,10 @@ import {
   CustomSection,
   CustomSectionItem,
   TailoredResume,
-  ResumeData
+  ResumeData,
+  OpenRouterSettings,
+  TailoredSession,
+  DEFAULT_SETTINGS
 } from '../types';
 
 export class CareerVaultDB extends Dexie {
@@ -23,6 +26,8 @@ export class CareerVaultDB extends Dexie {
   tailoredResumes!: Table<TailoredResume, string>;
   customSections!: Table<CustomSection, string>;
   customSectionItems!: Table<CustomSectionItem, string>;
+  settings!: Table<OpenRouterSettings, string>;
+  tailoredSessions!: Table<TailoredSession, number>;
 
   constructor() {
     super('ResumeUpCareerVault');
@@ -47,10 +52,83 @@ export class CareerVaultDB extends Dexie {
       customSections: 'id, title, order',
       customSectionItems: 'id, sectionId, title'
     });
+
+    this.version(3).stores({
+      profile: '++id',
+      experiences: 'id, company, role, startDate',
+      achievements: 'id, experienceId, category',
+      education: 'id, institution',
+      skills: 'id, category, name',
+      certifications: 'id, name',
+      tailoredResumes: 'id, templateId, createdAt, updatedAt',
+      customSections: 'id, title, order',
+      customSectionItems: 'id, sectionId, title',
+      settings: 'id',
+      tailoredSessions: '++id, timestamp, jobTitle'
+    });
   }
 }
 
 export const db = new CareerVaultDB();
+
+export async function getSettings(): Promise<OpenRouterSettings> {
+  try {
+    const existing = await db.settings.get('settings');
+    if (existing) {
+      let model = existing.defaultModel;
+      if (model === 'google/gemini-2.0-flash' || model === 'google/gemini-2.0-flash-001') {
+        model = 'nvidia/nemotron-3-ultra-550b-a55b:free';
+      }
+      if (model === 'meta-llama/llama-3.3-70b-instruct:free') {
+        model = 'openrouter/free';
+      }
+      return {
+        ...DEFAULT_SETTINGS,
+        ...existing,
+        defaultModel: model || DEFAULT_SETTINGS.defaultModel,
+        maxTokens: Math.max(existing.maxTokens || 6144, 6144),
+        maskingPreferences: {
+          ...DEFAULT_SETTINGS.maskingPreferences,
+          ...(existing.maskingPreferences || {})
+        }
+      };
+    }
+  } catch (err) {
+    console.warn('Error fetching settings:', err);
+  }
+  return { ...DEFAULT_SETTINGS };
+}
+
+export async function saveSettings(updates: Partial<OpenRouterSettings>): Promise<OpenRouterSettings> {
+  const current = await getSettings();
+  const merged: OpenRouterSettings = {
+    ...current,
+    ...updates,
+    id: 'settings',
+    maskingPreferences: {
+      ...current.maskingPreferences,
+      ...(updates.maskingPreferences || {})
+    }
+  };
+  await db.settings.put(merged);
+  return merged;
+}
+
+export async function clearApiKey(): Promise<void> {
+  await saveSettings({ apiKey: '' });
+}
+
+export async function saveTailoredSession(session: Omit<TailoredSession, 'id'>): Promise<number> {
+  return (await db.tailoredSessions.add(session as TailoredSession)) as number;
+}
+
+export async function getLatestTailoredSession(): Promise<TailoredSession | undefined> {
+  return await db.tailoredSessions.orderBy('id').reverse().first();
+}
+
+export async function getAllTailoredSessions(): Promise<TailoredSession[]> {
+  return await db.tailoredSessions.orderBy('id').reverse().toArray();
+}
 
 // Sample Data based on sample_data/career_template.json
 export const SAMPLE_DATA = {
@@ -74,7 +152,8 @@ export const SAMPLE_DATA = {
       location: "San Francisco, CA",
       startDate: "2022-01",
       endDate: "Present",
-      isCurrent: true
+      isCurrent: true,
+      industry: "Enterprise Cloud & Distributed Systems"
     },
     {
       id: "exp-2",
@@ -83,7 +162,8 @@ export const SAMPLE_DATA = {
       location: "Austin, TX",
       startDate: "2019-06",
       endDate: "2021-12",
-      isCurrent: false
+      isCurrent: false,
+      industry: "E-Commerce & High-Volume Consumer Web"
     }
   ],
   achievements: [
@@ -485,6 +565,7 @@ export async function exportVaultAsJSON(): Promise<string> {
       location: exp.location,
       start_date: exp.startDate,
       end_date: exp.endDate || (exp.isCurrent ? "Present" : ""),
+      industry: exp.industry || "",
       achievements: achievements
         .filter(ach => ach.experienceId === exp.id)
         .map(ach => ach.originalText)
@@ -582,7 +663,8 @@ export async function importVaultFromJSON(jsonString: string): Promise<void> {
           location: item.location || "",
           startDate: item.start_date || item.startDate || "",
           endDate: item.end_date || item.endDate || "",
-          isCurrent
+          isCurrent,
+          industry: item.industry || item.domain || ""
         });
 
         const achs: (string | { text?: string; originalText?: string; category?: string })[] = item.achievements || [];
@@ -869,6 +951,7 @@ export async function importVaultFromCSV(csvText: string): Promise<{ experiences
             location: string;
             startDate: string;
             endDate: string;
+            industry: string;
             achievements: { text: string; category?: string }[];
           }>();
 
@@ -891,6 +974,7 @@ export async function importVaultFromCSV(csvText: string): Promise<{ experiences
             const location = (row.Location || row.location || '').trim();
             const startDate = (row.StartDate || row.start_date || '').trim();
             const endDate = (row.EndDate || row.end_date || '').trim();
+            const industry = (row.Industry || row.industry || '').trim();
             const achievement = (row.Achievement || row.achievement || row.Bullet || row.bullet || '').trim();
             const category = (row.Category || row.category || '').trim();
             const url = (row.URL || row.url || '').trim();
@@ -908,6 +992,7 @@ export async function importVaultFromCSV(csvText: string): Promise<{ experiences
                   location,
                   startDate,
                   endDate,
+                  industry,
                   achievements: []
                 });
               }
@@ -952,7 +1037,8 @@ export async function importVaultFromCSV(csvText: string): Promise<{ experiences
                 location: group.location,
                 startDate: group.startDate,
                 endDate: group.endDate,
-                isCurrent
+                isCurrent,
+                industry: group.industry || ''
               });
               experiencesCount++;
 

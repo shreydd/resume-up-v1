@@ -63,18 +63,6 @@ export const App: React.FC = () => {
     setActiveTab('studio');
   };
 
-  const handleGlobalPrint = () => {
-    // If not already on studio, switch to studio or print
-    if (activeTab !== 'studio') {
-      setActiveTab('studio');
-      setTimeout(() => {
-        window.print();
-      }, 300);
-    } else {
-      window.print();
-    }
-  };
-
   return (
     <div className="h-screen bg-zinc-50 flex flex-col font-sans overflow-hidden">
       
@@ -106,7 +94,6 @@ export const App: React.FC = () => {
       <Header
         activeTab={activeTab}
         setActiveTab={setActiveTab}
-        onPrint={handleGlobalPrint}
         experienceCount={experiences?.length || 0}
         savedCount={savedResumes?.length || 0}
       />

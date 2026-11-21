@@ -15,7 +15,9 @@ import {
   Code,
   FileText,
   FolderPlus,
-  ExternalLink
+  ExternalLink,
+  Sparkles,
+  Zap
 } from 'lucide-react';
 
 interface InsertVaultDataModalProps {
@@ -24,7 +26,7 @@ interface InsertVaultDataModalProps {
   onInsert: (snippet: string) => void;
 }
 
-type TabType = 'achievements' | 'experiences' | 'custom' | 'skills' | 'education' | 'profile';
+type TabType = 'tailored' | 'achievements' | 'experiences' | 'custom' | 'skills' | 'education' | 'profile';
 
 function safeString(val: any): string {
   if (val === null || val === undefined) return '';
@@ -72,12 +74,51 @@ export const InsertVaultDataModal: React.FC<InsertVaultDataModalProps> = ({
   const profileList = useLiveQuery(() => db.profile.toArray());
   const customSections = useLiveQuery(() => db.customSections?.toArray());
   const customItems = useLiveQuery(() => db.customSectionItems?.toArray());
+  const latestTailoredSession = useLiveQuery(() => db.tailoredSessions?.orderBy('id').reverse().first());
 
   const profile = profileList?.[0];
 
   const [activeTab, setActiveTab] = useState<TabType>('achievements');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [formatMode, setFormatMode] = useState<'html' | 'raw'>('html');
+
+  // Filtered Tailored Bullets from latest session
+  const filteredTailoredBullets = useMemo(() => {
+    if (!latestTailoredSession) return [];
+    const list: Array<{
+      id: string;
+      original: string;
+      tailored: string;
+      reasoning: string;
+      role: string;
+      company: string;
+      accepted: boolean;
+    }> = [];
+
+    for (const exp of latestTailoredSession.tailoredExperiences || []) {
+      for (let i = 0; i < (exp.bullets || []).length; i++) {
+        const b = exp.bullets[i];
+        list.push({
+          id: `tailored-ins-${exp.experienceId}-${i}`,
+          original: b.original,
+          tailored: b.tailored,
+          reasoning: b.reasoning,
+          role: exp.role,
+          company: exp.company,
+          accepted: b.accepted
+        });
+      }
+    }
+
+    if (!searchQuery) return list;
+    const q = searchQuery.toLowerCase();
+    return list.filter(item => {
+      return item.tailored.toLowerCase().includes(q) ||
+        item.original.toLowerCase().includes(q) ||
+        item.company.toLowerCase().includes(q) ||
+        item.role.toLowerCase().includes(q);
+    });
+  }, [latestTailoredSession, searchQuery]);
 
   // Map of experience ID to experience for fast lookup
   const expMap = useMemo(() => {
@@ -409,6 +450,18 @@ export const InsertVaultDataModal: React.FC<InsertVaultDataModalProps> = ({
         {/* Category Tabs */}
         <div className="flex items-center gap-1 overflow-x-auto border-b border-zinc-200 pb-2">
           <button
+            onClick={() => setActiveTab('tailored')}
+            className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold whitespace-nowrap transition-all ${
+              activeTab === 'tailored'
+                ? 'bg-indigo-600 text-white shadow-sm'
+                : 'text-indigo-700 bg-indigo-50/70 hover:bg-indigo-100/70'
+            }`}
+          >
+            <Sparkles className="h-3.5 w-3.5 text-amber-300" />
+            <span>⭐ Tailored Suggestions ({filteredTailoredBullets.length})</span>
+          </button>
+
+          <button
             onClick={() => setActiveTab('achievements')}
             className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-all ${
               activeTab === 'achievements'
@@ -484,6 +537,69 @@ export const InsertVaultDataModal: React.FC<InsertVaultDataModalProps> = ({
         {/* Content Area */}
         <div className="max-h-96 overflow-y-auto space-y-2 pr-1">
           
+          {/* TAB 0: ⭐ TAILORED SUGGESTIONS */}
+          {activeTab === 'tailored' && (
+            filteredTailoredBullets.length === 0 ? (
+              <div className="text-center py-10 px-4 space-y-2">
+                <Sparkles className="mx-auto h-8 w-8 text-indigo-400" />
+                <h4 className="text-xs font-semibold text-zinc-700">No Tailored Bullets Found</h4>
+                <p className="text-[11px] text-zinc-400 max-w-sm mx-auto leading-relaxed">
+                  Run <strong>"Tailor with AI"</strong> to generate frontier-grade Google XYZ bullet points specifically aligned with your target job description.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-2.5">
+                {latestTailoredSession && (
+                  <div className="rounded-xl border border-indigo-100 bg-indigo-50/50 p-2.5 flex items-center justify-between text-xs">
+                    <div className="flex items-center gap-1.5">
+                      <Zap className="h-3.5 w-3.5 text-indigo-600" />
+                      <span className="font-semibold text-indigo-950">
+                        Tailored for: {latestTailoredSession.jobTitle}
+                      </span>
+                    </div>
+                    <span className="font-mono text-[11px] font-bold text-indigo-700 bg-white px-2 py-0.5 rounded-full border border-indigo-200">
+                      {latestTailoredSession.matchScore}% Match
+                    </span>
+                  </div>
+                )}
+
+                {filteredTailoredBullets.map(item => (
+                  <div
+                    key={item.id}
+                    className="group flex items-start justify-between gap-3 rounded-xl border border-indigo-100 bg-white p-3.5 hover:border-indigo-300 hover:bg-indigo-50/20 transition-all shadow-2xs"
+                  >
+                    <div className="flex-1 space-y-1">
+                      <div className="flex items-center gap-2 text-[11px] text-zinc-500 font-medium">
+                        <span className="font-semibold text-zinc-900">{item.role} @ {item.company}</span>
+                        <span className="rounded bg-indigo-100/70 text-indigo-800 px-1.5 py-0.2 font-mono text-[10px] font-semibold border border-indigo-200/60">
+                          Google XYZ
+                        </span>
+                      </div>
+                      <p className="text-xs text-zinc-900 leading-relaxed font-sans font-medium">
+                        {item.tailored}
+                      </p>
+                      {item.reasoning && (
+                        <p className="text-[11px] text-zinc-400 italic line-clamp-1 pt-0.5">
+                          "{item.reasoning}"
+                        </p>
+                      )}
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => handleInsertAchievement(item.tailored)}
+                      className="flex-shrink-0 flex items-center gap-1 rounded-lg bg-indigo-600 hover:bg-indigo-700 px-2.5 py-1.5 text-xs font-semibold text-white transition-colors shadow-2xs"
+                      title="Insert tailored bullet into resume editor"
+                    >
+                      <Plus className="h-3 w-3" />
+                      <span>Insert</span>
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )
+          )}
+
           {/* TAB 1: ACHIEVEMENTS & BULLETS */}
           {activeTab === 'achievements' && (
             filteredAchievements.length === 0 ? (
