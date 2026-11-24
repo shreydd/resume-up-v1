@@ -535,7 +535,7 @@ export const VaultManager: React.FC = () => {
       ? [...item.bullets]
       : (Array.isArray(item.description) ? [...(item.description as string[])] : ['']);
     setItemFormData({
-      title: item.title,
+      title: item.title || '',
       subtitle: item.subtitle || '',
       startDate: item.startDate || '',
       endDate: item.endDate || '',
@@ -549,15 +549,23 @@ export const VaultManager: React.FC = () => {
 
   const handleSaveItem = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!itemFormData.title.trim()) return;
-
     const cleanBullets = itemFormData.bullets
       .map(b => b.trim())
       .filter(b => b.length > 0);
 
+    const hasContent = itemFormData.title.trim() ||
+      itemFormData.subtitle.trim() ||
+      itemFormData.description.trim() ||
+      cleanBullets.length > 0;
+
+    if (!hasContent) {
+      showToast('Please provide at least a title, description, or bullets');
+      return;
+    }
+
     if (editingItem) {
       await db.customSectionItems.update(editingItem.id, {
-        title: itemFormData.title.trim(),
+        title: itemFormData.title.trim() || undefined,
         subtitle: itemFormData.subtitle.trim() || undefined,
         startDate: itemFormData.startDate.trim() || undefined,
         endDate: itemFormData.endDate.trim() || undefined,
@@ -572,7 +580,7 @@ export const VaultManager: React.FC = () => {
       await db.customSectionItems.put({
         id: newId,
         sectionId: targetSectionId,
-        title: itemFormData.title.trim(),
+        title: itemFormData.title.trim() || undefined,
         subtitle: itemFormData.subtitle.trim() || undefined,
         startDate: itemFormData.startDate.trim() || undefined,
         endDate: itemFormData.endDate.trim() || undefined,
@@ -1368,7 +1376,9 @@ export const VaultManager: React.FC = () => {
                                 <div className="flex items-start justify-between gap-4">
                                   <div>
                                     <div className="flex items-center gap-2">
-                                      <h4 className="font-semibold text-sm text-zinc-900">{item.title}</h4>
+                                      {item.title ? (
+                                        <h4 className="font-semibold text-sm text-zinc-900">{item.title}</h4>
+                                      ) : null}
                                       {item.url && (
                                         <a
                                           href={item.url}
@@ -1889,13 +1899,14 @@ export const VaultManager: React.FC = () => {
       >
         <form onSubmit={handleSaveItem} className="space-y-4">
           <div>
-            <label className="block text-xs font-semibold text-zinc-700 mb-1">Title / Name *</label>
+            <label className="block text-xs font-semibold text-zinc-700 mb-1">
+              Title / Name <span className="text-zinc-400 font-normal">(Optional — leave blank for summaries)</span>
+            </label>
             <input
               type="text"
-              required
               value={itemFormData.title}
               onChange={e => setItemFormData({ ...itemFormData, title: e.target.value })}
-              placeholder="e.g. Distributed Key-Value Store, Hackathon Winner, IEEE Paper..."
+              placeholder="e.g. Distributed Key-Value Store (or leave empty if section title is sufficient)"
               className="w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm focus:border-zinc-900 focus:outline-none"
             />
           </div>

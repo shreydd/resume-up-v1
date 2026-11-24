@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../../db';
 import { TailoredResume } from '../../types';
+import { exportResumeToPDF } from '../../services/pdfExportService';
 import { 
   BookmarkCheck, 
   Trash2, 
@@ -11,7 +12,9 @@ import {
   Calendar, 
   FileText,
   Clock,
-  Sparkles
+  Sparkles,
+  Download,
+  Loader2
 } from 'lucide-react';
 
 interface SavedResumesViewProps {
@@ -28,6 +31,23 @@ export const SavedResumesView: React.FC<SavedResumesViewProps> = ({
   );
 
   const [activePrintResume, setActivePrintResume] = useState<TailoredResume | null>(null);
+  const [exportingId, setExportingId] = useState<string | null>(null);
+
+  const handleExportPDF = async (resume: TailoredResume) => {
+    try {
+      setExportingId(resume.id);
+      const filename = `${resume.title.trim().replace(/\s+/g, "_") || "Resume"}.pdf`;
+      await exportResumeToPDF({
+        html: resume.rawHtml,
+        filename
+      });
+    } catch (err) {
+      console.error("Failed to export PDF:", err);
+      handlePrint(resume);
+    } finally {
+      setExportingId(null);
+    }
+  };
 
   const handleDelete = async (id: string) => {
     if (confirm('Delete this saved resume?')) {
@@ -130,15 +150,21 @@ export const SavedResumesView: React.FC<SavedResumesViewProps> = ({
 
                 <div className="flex items-center gap-2">
                   <button
-                    onClick={() => handlePrint(resume)}
-                    className="flex items-center gap-1 rounded-lg border border-zinc-200 bg-white px-2.5 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50 transition-colors"
+                    onClick={() => handleExportPDF(resume)}
+                    disabled={exportingId === resume.id}
+                    className="flex items-center gap-1.5 rounded-lg bg-zinc-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-zinc-800 transition-colors shadow-sm disabled:opacity-60"
+                    title="Export vector PDF via @react-pdf/renderer"
                   >
-                    <Printer className="h-3.5 w-3.5 text-zinc-500" />
-                    <span>Print</span>
+                    {exportingId === resume.id ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <Download className="h-3.5 w-3.5" />
+                    )}
+                    <span>Export PDF</span>
                   </button>
                   <button
                     onClick={() => onOpenInStudio(resume)}
-                    className="flex items-center gap-1 rounded-lg bg-zinc-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-zinc-800 transition-colors"
+                    className="flex items-center gap-1 rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50 transition-colors"
                   >
                     <span>Open</span>
                     <ExternalLink className="h-3.5 w-3.5" />

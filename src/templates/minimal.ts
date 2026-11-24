@@ -125,17 +125,25 @@ export function generateMinimalHTML(data: ResumeData): string {
         const displayUrl = rawUrl ? rawUrl.replace(/^https?:\/\//i, '').replace(/\/$/, '') : '';
         const urlLink = href ? ` | <a href="${escapeHtml(href)}" target="_blank" rel="noreferrer" class="entry-link">${escapeHtml(displayUrl)}</a>` : '';
 
-        return `
-        <div class="minimal-entry">
+        const itemTitle = (item.title || '').trim();
+        const isTitleDuplicateOfSection = itemTitle.toLowerCase() === sectionTitle.toLowerCase();
+        const effectiveTitle = isTitleDuplicateOfSection ? '' : itemTitle;
+        const hasHeaderRow = Boolean(effectiveTitle || urlLink || [item.startDate, item.endDate].filter(Boolean).length > 0);
+        const headerRowHtml = hasHeaderRow ? `
           <div class="entry-top">
             <span class="primary-text">
-              <strong>${escapeHtml(item.title || '')}</strong>${urlLink}
+              ${effectiveTitle ? `<strong>${escapeHtml(effectiveTitle)}</strong>` : ''}${urlLink}
             </span>
             <span class="meta-text">${escapeHtml([item.startDate, item.endDate].filter(Boolean).join(' — '))}</span>
           </div>
+        ` : '';
+
+        return `
+        <div class="minimal-entry">
+          ${headerRowHtml}
           ${item.subtitle ? `
             <div class="entry-sub">
-              <span class="secondary-text"><em>${escapeHtml(item.subtitle)}</em></span>
+              <span class="secondary-text">${escapeHtml(item.subtitle)}</span>
             </div>
           ` : ''}
           ${descText ? `<p class="entry-desc">${escapeHtml(descText)}</p>` : ''}
@@ -178,6 +186,8 @@ export const minimalCSS = `
   background-color: #fff;
   font-size: 10pt;
   line-height: 1.45;
+  font-variant-ligatures: none;
+  font-feature-settings: "liga" 0, "clig" 0;
   padding: 16mm 18mm;
   box-sizing: border-box;
 }

@@ -11,8 +11,11 @@ import { db } from '../../db';
 import { Modal } from '../Shared/Modal';
 import { CURATED_FONTS, loadGoogleFontOnDemand, applyFontToCSS } from './fontOptions';
 import { InsertVaultDataModal } from './InsertVaultDataModal';
+import { exportResumeToPDF } from '../../services/pdfExportService';
 import { 
   Printer, 
+  Download,
+  Loader2,
   Columns, 
   Eye, 
   RotateCcw, 
@@ -52,6 +55,7 @@ export const ResumeStudioView: React.FC<ResumeStudioViewProps> = ({
   const [viewMode, setViewMode] = useState<'split' | 'preview'>('split');
   const [codeTab, setCodeTab] = useState<'html' | 'css'>('html');
   const [zoomLevel, setZoomLevel] = useState<number>(70);
+  const [isExportingPDF, setIsExportingPDF] = useState<boolean>(false);
 
   const [rawHtml, setRawHtml] = useState<string>('');
   const [rawCss, setRawCss] = useState<string>('');
@@ -317,7 +321,7 @@ export const ResumeStudioView: React.FC<ResumeStudioViewProps> = ({
   // Initialize or update template when resumeData, savedResume or template changes
   useEffect(() => {
     if (savedResume) {
-      setSelectedTemplate(savedResume.templateId === 'jake' ? 'minimal' : (savedResume.templateId as 'minimal' | 'custom'));
+      setSelectedTemplate(savedResume.templateId === 'custom' ? 'custom' : 'minimal');
       setResumeTitle(savedResume.title);
       setRawHtml(savedResume.rawHtml);
       setRawCss(savedResume.rawCss);
@@ -396,6 +400,29 @@ export const ResumeStudioView: React.FC<ResumeStudioViewProps> = ({
     setIsSaveModalOpen(false);
     showToast('Saved to My Resumes');
     if (onSaved) onSaved();
+  };
+
+  const handleExportATS_PDF = async () => {
+    try {
+      setIsExportingPDF(true);
+      showToast('Generating ATS-compliant vector PDF...');
+      const nameSlug = initialResumeData?.profile?.fullName
+        ? `${initialResumeData.profile.fullName.trim().replace(/\s+/g, '_')}_Resume.pdf`
+        : (resumeTitle.trim().replace(/\s+/g, '_') ? `${resumeTitle.trim().replace(/\s+/g, '_')}.pdf` : 'Resume.pdf');
+
+      await exportResumeToPDF({
+        resumeData: initialResumeData,
+        html: liveHtml,
+        filename: nameSlug
+      });
+      showToast('ATS PDF downloaded successfully!');
+    } catch (err) {
+      console.error('Failed to export PDF:', err);
+      showToast('Export failed, falling back to browser print...');
+      handlePrint();
+    } finally {
+      setIsExportingPDF(false);
+    }
   };
 
   const handlePrint = () => {
@@ -638,16 +665,21 @@ export const ResumeStudioView: React.FC<ResumeStudioViewProps> = ({
             <span>Save</span>
           </button>
 
-          {/* Export PDF */}
+          {/* Export ATS PDF via @react-pdf/renderer */}
           <button
             type="button"
-            onClick={handlePrint}
-            className="flex items-center gap-1.5 rounded-lg bg-zinc-900 px-3.5 py-1.5 text-xs font-medium text-white shadow-sm hover:bg-zinc-800 transition-colors active:scale-95"
+            onClick={handleExportATS_PDF}
+            disabled={isExportingPDF}
+            className="flex items-center gap-1.5 rounded-lg bg-zinc-900 px-3.5 py-1.5 text-xs font-medium text-white shadow-sm hover:bg-zinc-800 transition-colors active:scale-95 disabled:opacity-60"
+            title="Download vector PDF built with @react-pdf/renderer for 100% ATS readability"
           >
-            <Printer className="h-3.5 w-3.5" />
-            <span>Export PDF</span>
+            {isExportingPDF ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Download className="h-3.5 w-3.5" />
+            )}
+            <span>{isExportingPDF ? 'Exporting...' : 'Export ATS PDF'}</span>
           </button>
-
         </div>
       </div>
 

@@ -291,17 +291,20 @@ export const InsertVaultDataModal: React.FC<InsertVaultDataModalProps> = ({
     }
 
     if (formatMode === 'html') {
-      const titleLink = rawUrl
-        ? `<a href="${rawUrl}" target="_blank"><strong>${escapeHtml(title)}</strong></a>`
-        : `<strong>${escapeHtml(title)}</strong>`;
+      const hasHeader = title || dates;
+      const titleLink = title
+        ? (rawUrl
+          ? `<a href="${rawUrl}" target="_blank"><strong>${escapeHtml(title)}</strong></a>`
+          : `<strong>${escapeHtml(title)}</strong>`)
+        : '';
 
       const snippet = `
 <div class="entry-block custom-block">
-  <div class="row-header">
-    <span class="title">${titleLink}</span>
-    <span class="dates"><em>${escapeHtml(dates)}</em></span>
-  </div>
-  ${subtitle ? `<div class="row-sub"><span class="subtitle"><em>${escapeHtml(subtitle)}</em></span></div>` : ''}
+  ${hasHeader ? `<div class="row-header">
+    ${titleLink ? `<span class="title">${titleLink}</span>` : ''}
+    ${dates ? `<span class="dates">${escapeHtml(dates)}</span>` : ''}
+  </div>` : ''}
+  ${subtitle ? `<div class="row-sub"><span class="subtitle">${escapeHtml(subtitle)}</span></div>` : ''}
   ${descText ? `<p class="entry-desc">${escapeHtml(descText)}</p>` : ''}
   ${bullets.length > 0 ? `<ul class="bullet-list">
     ${bullets.map(b => `<li>${escapeHtml(b)}</li>`).join('\n    ')}

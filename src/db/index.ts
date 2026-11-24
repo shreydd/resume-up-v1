@@ -905,7 +905,7 @@ export async function exportVaultAsCSV(): Promise<string> {
       if (!item.bullets || item.bullets.length === 0) {
         rows.push({
           Section: sec.title,
-          Title: item.title,
+          Title: item.title || '',
           Subtitle: item.subtitle || '',
           Location: item.location || '',
           StartDate: item.startDate || '',
@@ -917,7 +917,7 @@ export async function exportVaultAsCSV(): Promise<string> {
         for (const bullet of item.bullets) {
           rows.push({
             Section: sec.title,
-            Title: item.title,
+            Title: item.title || '',
             Subtitle: item.subtitle || '',
             Location: item.location || '',
             StartDate: item.startDate || '',

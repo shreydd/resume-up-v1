@@ -78,6 +78,14 @@
     display: none !important;
   }
 
+  /* ATS PDF Print Optimization: suppress ligatures and force geometric precision to avoid glyph fragmentation */
+  .print-portal-container,
+  .print-portal-container * {
+    font-variant-ligatures: none !important;
+    font-feature-settings: "liga" 0, "clig" 0 !important;
+    text-rendering: geometricPrecision !important;
+  }
+
   /* Direct-child print portal container */
   .print-portal-container {
     display: block !important;

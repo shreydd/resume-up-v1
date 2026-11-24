@@ -65,7 +65,7 @@ export interface CustomSection {
 export interface CustomSectionItem {
   id: string; // UUID
   sectionId: string; // references CustomSection.id
-  title: string; // e.g. "Distributed KV Store", "Robotics Club Lead"
+  title?: string; // Optional: e.g. "Distributed KV Store", or empty for summary paragraphs
   subtitle?: string; // e.g. "Go, Raft, gRPC", "Stanford Robotics Club"
   startDate?: string;
   endDate?: string;
